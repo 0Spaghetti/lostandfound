@@ -553,4 +553,32 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get onboardingPage3Subtitle =>
       'Coordinate the return in-app while keeping personal information private.';
+
+  @override
+  String get noNotifications => 'No notifications yet';
+
+  @override
+  String get notificationsEmptyHint =>
+      'You\'ll be notified when matches or updates are found.';
+
+  @override
+  String get clearAll => 'Clear All';
+
+  @override
+  String get markAllRead => 'Mark all as read';
+
+  @override
+  String get clearAllConfirm => 'Clear all notifications?';
+
+  @override
+  String get clearAllConfirmMessage => 'This action cannot be undone.';
+
+  @override
+  String get notificationDeleted => 'Notification deleted';
+
+  @override
+  String get allNotificationsCleared => 'All notifications cleared';
+
+  @override
+  String get allNotificationsMarkedRead => 'All notifications marked as read';
 }

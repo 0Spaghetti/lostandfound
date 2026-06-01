@@ -71,12 +71,16 @@ class HeaderBar extends StatelessWidget {
     required this.subtitle,
     required this.onLanguageToggle,
     required this.languageLabel,
+    this.onNotificationsTap,
+    this.hasUnreadNotifications = false,
   });
 
   final String title;
   final String subtitle;
   final VoidCallback onLanguageToggle;
   final String languageLabel;
+  final VoidCallback? onNotificationsTap;
+  final bool hasUnreadNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -131,7 +135,7 @@ class HeaderBar extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         _NotificationBell(
-          onTap: () {
+          onTap: onNotificationsTap ?? () {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(strings.comingSoon),
@@ -139,6 +143,7 @@ class HeaderBar extends StatelessWidget {
               ),
             );
           },
+          hasUnread: hasUnreadNotifications,
         ),
       ],
     );
@@ -151,11 +156,13 @@ class PremiumHomeHeader extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onNotificationsTap,
+    this.hasUnreadNotifications = false,
   });
 
   final String title;
   final String subtitle;
   final VoidCallback onNotificationsTap;
+  final bool hasUnreadNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -211,7 +218,7 @@ class PremiumHomeHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          _NotificationBell(onTap: onNotificationsTap),
+          _NotificationBell(onTap: onNotificationsTap, hasUnread: hasUnreadNotifications),
         ],
       ),
     );
@@ -229,9 +236,9 @@ class _CampusCrest extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFE4EAF3)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0D0A2758),
@@ -362,9 +369,13 @@ class _CampusCrestPainter extends CustomPainter {
 }
 
 class _NotificationBell extends StatelessWidget {
-  const _NotificationBell({required this.onTap});
+  const _NotificationBell({
+    required this.onTap,
+    this.hasUnread = false,
+  });
 
   final VoidCallback onTap;
+  final bool hasUnread;
 
   @override
   Widget build(BuildContext context) {
@@ -379,18 +390,19 @@ class _NotificationBell extends StatelessWidget {
             color: Color(0xFF0A2758),
             size: 26,
           ),
-          PositionedDirectional(
-            top: 2,
-            end: 2,
-            child: Container(
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                color: Color(0xFF1C63E8),
-                shape: BoxShape.circle,
+          if (hasUnread)
+            PositionedDirectional(
+              top: 2,
+              end: 2,
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1C63E8),
+                  shape: BoxShape.circle,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -429,32 +441,33 @@ class PremiumHomeSearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final subColor = Theme.of(context).colorScheme.onSurfaceVariant;
     return Container(
       height: 48,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE4EAF3)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 20),
+          Icon(Icons.search_rounded, color: subColor, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: controller,
               textInputAction: TextInputAction.search,
-              style: const TextStyle(
-                color: Color(0xFF111827),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
               decoration: InputDecoration(
                 hintText: hint,
-                hintStyle: const TextStyle(
-                  color: Color(0xFF94A3B8),
+                hintStyle: TextStyle(
+                  color: subColor,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
@@ -562,16 +575,20 @@ class FilterChipButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final border = Theme.of(context).colorScheme.outlineVariant;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final onSurfaceVariant = Theme.of(context).colorScheme.onSurfaceVariant;
     return ActionChip(
-      avatar: Icon(icon, size: 18, color: const Color(0xFF6B7280)),
+      avatar: Icon(icon, size: 18, color: active ? primary : onSurfaceVariant),
       label: Text(label, overflow: TextOverflow.ellipsis),
       onPressed: onTap,
-      backgroundColor: active ? const Color(0xFFDBEAFE) : Colors.white,
+      backgroundColor: active ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).cardColor,
       side: BorderSide(
-        color: active ? const Color(0xFF1D4ED8) : const Color(0xFFE5E7EB),
+        color: active ? primary : border,
       ),
       labelStyle: TextStyle(
-        color: active ? const Color(0xFF1D4ED8) : const Color(0xFF6B7280),
+        color: active ? Theme.of(context).colorScheme.onPrimaryContainer : onSurface,
         fontWeight: FontWeight.w800,
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
@@ -608,25 +625,30 @@ class ItemPostCard extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
-            boxShadow: const [
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            boxShadow: [
               BoxShadow(
-                color: Color(0x08000000),
+                color: Theme.of(context).brightness == Brightness.light
+                    ? const Color(0x08000000)
+                    : Colors.black.withValues(alpha: 0.2),
                 blurRadius: 14,
-                offset: Offset(0, 6),
+                offset: const Offset(0, 6),
               ),
             ],
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              PhotoPreview(
-                photoUrl: post.photoUrl,
-                category: post.category,
-                size: 100,
-                iconSize: 42,
+              Hero(
+                tag: 'photo-${post.id}',
+                child: PhotoPreview(
+                  photoUrl: post.photoUrl,
+                  category: post.category,
+                  size: 100,
+                  iconSize: 42,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -643,7 +665,7 @@ class ItemPostCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w900,
-                              color: const Color(0xFF111827),
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ),
@@ -706,9 +728,10 @@ class InfoLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final subColor = Theme.of(context).colorScheme.onSurfaceVariant;
     return Row(
       children: [
-        Icon(icon, size: 16, color: const Color(0xFF6B7280)),
+        Icon(icon, size: 16, color: subColor),
         const SizedBox(width: 5),
         Expanded(
           child: Text(
@@ -716,7 +739,7 @@ class InfoLine extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF6B7280),
+              color: subColor,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1123,6 +1146,73 @@ class SheetHandle extends StatelessWidget {
           color: const Color(0xFFD5DEEA),
           borderRadius: BorderRadius.circular(99),
         ),
+      ),
+    );
+  }
+}
+
+class FadeInSlide extends StatefulWidget {
+  const FadeInSlide({
+    super.key,
+    required this.child,
+    this.delay = Duration.zero,
+    this.duration = const Duration(milliseconds: 400),
+  });
+
+  final Widget child;
+  final Duration delay;
+  final Duration duration;
+
+  @override
+  State<FadeInSlide> createState() => _FadeInSlideState();
+}
+
+class _FadeInSlideState extends State<FadeInSlide> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.duration,
+    );
+    _opacity = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+
+    if (widget.delay == Duration.zero) {
+      _controller.forward();
+    } else {
+      Future.delayed(widget.delay, () {
+        if (mounted) {
+          _controller.forward();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _slide,
+        child: widget.child,
       ),
     );
   }

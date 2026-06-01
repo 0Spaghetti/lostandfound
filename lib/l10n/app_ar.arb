@@ -183,5 +183,14 @@
   "onboardingPage2Title": "استخدم الصورة والموقع لمطابقة العناصر",
   "onboardingPage2Subtitle": "صورة واضحة وموقع دقيق يجعلان البحث والمطابقة أسهل للجميع.",
   "onboardingPage3Title": "تحدث بأمان مع صاحب البلاغ",
-  "onboardingPage3Subtitle": "تواصل داخل التطبيق لتنسيق الاستلام مع الحفاظ على الخصوصية."
+  "onboardingPage3Subtitle": "تواصل داخل التطبيق لتنسيق الاستلام مع الحفاظ على الخصوصية.",
+  "noNotifications": "لا توجد إشعارات بعد",
+  "notificationsEmptyHint": "سنقوم بإشعارك عند العثور على مطابقات أو تحديثات.",
+  "clearAll": "مسح الكل",
+  "markAllRead": "تحديد الكل كمقروء",
+  "clearAllConfirm": "مسح جميع الإشعارات؟",
+  "clearAllConfirmMessage": "لا يمكن التراجع عن هذا الإجراء.",
+  "notificationDeleted": "تم حذف الإشعار",
+  "allNotificationsCleared": "تم مسح جميع الإشعارات",
+  "allNotificationsMarkedRead": "تم تحديد جميع الإشعارات كمقروءة"
 }

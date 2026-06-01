@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' as intl;
 
@@ -44,6 +48,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   bool _hasReward = false;
   bool _publishing = false;
   bool _showErrors = false;
+  bool _userManuallySelectedCategory = false;
 
   AppStrings get strings => widget.strings;
 
@@ -68,13 +73,121 @@ class _AddItemScreenState extends State<AddItemScreen> {
       _brandController.text = existing.itemBrand ?? '';
       _detailsController.text = existing.distinguishingDetails ?? '';
       _locationDetailController.text = existing.locationDetail ?? '';
+      _userManuallySelectedCategory = true;
     }
   }
 
   void _onTextChanged() {
     if (mounted) {
-      setState(() {});
+      setState(() {
+        if (!_userManuallySelectedCategory) {
+          final text = '${_titleController.text} ${_descriptionController.text}'.toLowerCase();
+          final detected = _detectCategoryFromText(text);
+          if (detected != null) {
+            _category = detected;
+          }
+        }
+      });
     }
+  }
+
+  ItemCategory? _detectCategoryFromText(String text) {
+    if (RegExp(r'\b(phone|iphone|samsung|pixel|headphones|earbuds|buds|airpods|charger|cable|wire|laptop|computer|macbook|ipad|tablet|screen|watch|smartwatch|powerbank|battery)\b').hasMatch(text)) {
+      return ItemCategory.electronics;
+    }
+    if (RegExp(r'\b(key|keys|ring|keychain|fob|car key|dorm key)\b').hasMatch(text)) {
+      return ItemCategory.keys;
+    }
+    if (RegExp(r'\b(bag|backpack|wallet|purse|backpack|backpacks|pouch|case|sleeve|bag|pocketbook)\b').hasMatch(text)) {
+      return ItemCategory.bag;
+    }
+    if (RegExp(r'\b(id|card|cards|license|visa|mastercard|student id|permit|pass|badge|student card)\b').hasMatch(text)) {
+      return ItemCategory.cards;
+    }
+    return null;
+  }
+
+  Future<String> _createMockItemPhoto(ItemCategory category) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 400, 400));
+    
+    final paint = Paint()
+      ..shader = ui.Gradient.linear(
+        const Offset(0, 0),
+        const Offset(400, 400),
+        switch (category) {
+          ItemCategory.electronics => [const Color(0xFFE8F1FF), const Color(0xFF3578F6)],
+          ItemCategory.keys => [const Color(0xFFFFC97C), const Color(0xFF9A5B10)],
+          ItemCategory.bag => [const Color(0xFF45678F), const Color(0xFF0A2758)],
+          ItemCategory.cards => [const Color(0xFFFDA4AF), const Color(0xFFE11D48)],
+          ItemCategory.other => [const Color(0xFF2DD4BF), const Color(0xFF0F766E)],
+        },
+      );
+    canvas.drawRect(const Rect.fromLTWH(0, 0, 400, 400), paint);
+    
+    final borderPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.2)
+      ..strokeWidth = 14
+      ..style = PaintingStyle.stroke;
+    canvas.drawRect(const Rect.fromLTWH(20, 20, 360, 360), borderPaint);
+    
+    final itemPaint = Paint()..color = Colors.white;
+    final center = const Offset(200, 200);
+    
+    switch (category) {
+      case ItemCategory.electronics:
+        canvas.drawCircle(center, 70, Paint()..color = Colors.white.withValues(alpha: 0.15));
+        canvas.drawCircle(const Offset(140, 200), 30, itemPaint);
+        canvas.drawCircle(const Offset(260, 200), 30, itemPaint);
+        canvas.drawArc(
+          Rect.fromCenter(center: center, width: 120, height: 120),
+          3.14,
+          3.14,
+          false,
+          Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 16
+            ..strokeCap = StrokeCap.round,
+        );
+        break;
+      case ItemCategory.keys:
+        canvas.drawCircle(const Offset(200, 160), 40, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 12);
+        canvas.drawRect(const Rect.fromLTWH(188, 200, 24, 90), itemPaint);
+        canvas.drawRect(const Rect.fromLTWH(206, 230, 24, 16), itemPaint);
+        canvas.drawRect(const Rect.fromLTWH(206, 260, 24, 16), itemPaint);
+        break;
+      case ItemCategory.bag:
+        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(130, 150, 140, 150), const Radius.circular(24)), itemPaint);
+        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(150, 220, 100, 70), const Radius.circular(12)), Paint()..color = Colors.white.withValues(alpha: 0.25));
+        canvas.drawArc(
+          Rect.fromCenter(center: const Offset(200, 150), width: 60, height: 60),
+          3.14,
+          3.14,
+          false,
+          Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 10,
+        );
+        break;
+      case ItemCategory.cards:
+        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(110, 130, 180, 120), const Radius.circular(16)), itemPaint);
+        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(130, 150, 40, 40), const Radius.circular(8)), Paint()..color = const Color(0xFF6B7280).withValues(alpha: 0.2));
+        canvas.drawRect(const Rect.fromLTWH(185, 150, 80, 12), Paint()..color = const Color(0xFF6B7280).withValues(alpha: 0.2));
+        canvas.drawRect(const Rect.fromLTWH(185, 170, 60, 10), Paint()..color = const Color(0xFF6B7280).withValues(alpha: 0.2));
+        break;
+      case ItemCategory.other:
+        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(130, 150, 140, 120), const Radius.circular(12)), itemPaint);
+        canvas.drawRect(const Rect.fromLTWH(190, 120, 20, 170), Paint()..color = Colors.white.withValues(alpha: 0.3));
+        break;
+    }
+    
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(400, 400);
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    final bytes = byteData!.buffer.asUint8List();
+    return dataUriFromBytes(bytes);
   }
 
   @override
@@ -100,24 +213,63 @@ class _AddItemScreenState extends State<AddItemScreen> {
       builder: (context) => RoundedSheet(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SheetHandle(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              child: Text(
+                strings.localeName == 'ar' ? 'مصدر الصورة' : 'Select Photo Source',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
             ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: Text(strings.camera),
+              leading: Icon(Icons.photo_camera_outlined, color: Theme.of(context).colorScheme.primary),
+              title: Text(strings.camera, style: const TextStyle(fontWeight: FontWeight.w700)),
               onTap: () => Navigator.pop(context, 'camera'),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: Text(strings.gallery),
+              leading: Icon(Icons.photo_library_outlined, color: Theme.of(context).colorScheme.primary),
+              title: Text(strings.gallery, style: const TextStyle(fontWeight: FontWeight.w700)),
               onTap: () => Navigator.pop(context, 'gallery'),
             ),
+            Divider(color: Theme.of(context).colorScheme.outlineVariant, height: 24, indent: 18, endIndent: 18),
+            ListTile(
+              leading: const Icon(Icons.auto_awesome_rounded, color: Color(0xFFE2B84C)),
+              title: Text(
+                strings.localeName == 'ar' ? 'توليد بطاقة رقمية مميزة' : 'Generate Premium Illustration',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text(
+                strings.localeName == 'ar' ? 'توليد لوحة مميزة بناءً على الفئة المختارة' : 'Create a custom digital graphic of the item',
+                style: const TextStyle(fontSize: 11),
+              ),
+              onTap: () => Navigator.pop(context, 'illustration'),
+            ),
+            const SizedBox(height: 12),
           ],
         ),
       ),
     );
 
     if (choice == null) return;
+    
+    if (choice == 'illustration') {
+      final selectedCat = _category ?? ItemCategory.other;
+      setState(() => _publishing = true);
+      final picked = await _createMockItemPhoto(selectedCat);
+      setState(() {
+        _photoUrl = picked;
+        _publishing = false;
+        _showErrors = false;
+      });
+      return;
+    }
+
     final picked = await _pickPhotoDataUri(fromCamera: choice == 'camera');
     if (picked == null) return;
     setState(() {
@@ -266,6 +418,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
     if (widget.existingPost == null) {
       await widget.repository.addPost(post);
+      final userPostsCount = widget.repository.posts
+          .where((p) => p.createdBy.userId == 'current-user')
+          .length;
+      if (userPostsCount == 1 || userPostsCount == 3) {
+        await _showMilestoneCelebration(userPostsCount);
+      }
     } else {
       await widget.repository.updatePost(post);
     }
@@ -285,6 +443,124 @@ class _AddItemScreenState extends State<AddItemScreen> {
     Navigator.of(context).pop(post);
   }
 
+  Future<void> _showMilestoneCelebration(int count) async {
+    final isArabic = (Localizations.localeOf(context).languageCode == 'ar');
+    await HapticFeedback.heavyImpact();
+
+    final title = isArabic ? '🏆 إنجاز جديد!' : '🏆 Milestone Unlocked!';
+    final subtitle = count == 1
+        ? (isArabic
+            ? 'لقد قمت بنشر بلاغك الأول بنجاح! تم فتح وسام البلاغ الأول.'
+            : 'You have published your first report! First Report badge unlocked.')
+        : (isArabic
+            ? 'ثلاثة بلاغات نشطة! تم فتح وسام العضو النشط.'
+            : 'Three active reports! Active Member badge unlocked.');
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Directionality(
+          textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+          child: Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            backgroundColor: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.2),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.15),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFBBF24).withValues(alpha: 0.3),
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Text(
+                        '🏆',
+                        style: TextStyle(fontSize: 48),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0A2758),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                    child: Text(isArabic ? 'رائع!' : 'Awesome!'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -297,13 +573,13 @@ class _AddItemScreenState extends State<AddItemScreen> {
     return Directionality(
       textDirection: textDirection,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF7F9FC),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           automaticallyImplyLeading: false,
           toolbarHeight: 64,
           leadingWidth: 72,
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
+          backgroundColor: Theme.of(context).cardColor,
+          surfaceTintColor: Theme.of(context).cardColor,
           elevation: 0,
           shadowColor: Colors.transparent,
           centerTitle: true,
@@ -317,8 +593,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 : strings.editReport,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF0A2758),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
               fontSize: 18,
               fontWeight: FontWeight.w900,
             ),
@@ -329,9 +605,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
               child: Center(child: isArabic ? backButton : const _TopBarLogo()),
             ),
           ],
-          bottom: const PreferredSize(
-            preferredSize: Size.fromHeight(1),
-            child: Divider(height: 1, thickness: 1, color: Color(0xFFE4EAF3)),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Divider(height: 1, thickness: 1, color: Theme.of(context).colorScheme.outlineVariant),
           ),
         ),
         body: SafeArea(
@@ -348,6 +624,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 const SizedBox(height: 14),
                 _UploadArea(
                   photoUrl: _photoUrl,
+                  category: _category ?? ItemCategory.other,
                   hasError: _showErrors && _photoUrl == null,
                   strings: strings,
                   onTap: _pickImage,
@@ -357,12 +634,30 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 const SizedBox(height: 14),
                 _FormRowCard(
                   label: strings.category,
+                  trailing: (!_userManuallySelectedCategory && _category != null)
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            isArabic ? '✨ مقترح' : '✨ Auto-selected',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        )
+                      : null,
                   child: DropdownButtonFormField<ItemCategory>(
                     initialValue: _category,
                     isExpanded: true,
-                    icon: const Icon(
+                    dropdownColor: Theme.of(context).cardColor,
+                    icon: Icon(
                       Icons.keyboard_arrow_down_rounded,
-                      color: Color(0xFF64748B),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     hint: Text(strings.categorySelectHint),
                     decoration: const InputDecoration(
@@ -374,8 +669,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
                     ),
-                    style: const TextStyle(
-                      color: Color(0xFF12233D),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                     ),
@@ -388,6 +683,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     onChanged: (value) {
                       setState(() {
                         _category = value;
+                        _userManuallySelectedCategory = true;
                         _showErrors = false;
                       });
                     },
@@ -410,8 +706,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
                     ),
-                    style: const TextStyle(
-                      color: Color(0xFF12233D),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                     ),
@@ -460,8 +756,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
                     ),
-                    style: const TextStyle(
-                      color: Color(0xFF12233D),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                     ),
@@ -489,8 +785,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                             }) => null,
                         decoration: InputDecoration(
                           hintText: strings.itemDescriptionHint,
-                          hintStyle: const TextStyle(
-                            color: Color(0xFF94A3B8),
+                          hintStyle: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -502,8 +798,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                           isDense: true,
                           contentPadding: EdgeInsets.zero,
                         ),
-                        style: const TextStyle(
-                          color: Color(0xFF12233D),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
@@ -521,7 +817,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                         child: Text(
                           '${_descriptionController.text.length}/500',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: const Color(0xFF94A3B8),
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
                           ),
@@ -556,19 +852,19 @@ class _AddItemScreenState extends State<AddItemScreen> {
               onPressed: _publishing ? null : _publish,
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
-                backgroundColor: const Color(0xFF0A2758),
-                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(26),
                 ),
               ),
               child: _publishing
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onPrimary,
                       ),
                     )
                   : Text(
@@ -602,14 +898,16 @@ class _SurfaceCard extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE4EAF3)),
-        boxShadow: const [
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x080A2758),
+            color: Theme.of(context).brightness == Brightness.light
+                ? const Color(0x080A2758)
+                : Colors.black.withValues(alpha: 0.15),
             blurRadius: 12,
-            offset: Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -630,7 +928,7 @@ class FieldLabel extends StatelessWidget {
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
         fontSize: 13,
         fontWeight: FontWeight.w900,
-        color: const Color(0xFF0A2758),
+        color: Theme.of(context).colorScheme.primary,
       ),
     );
   }
@@ -687,7 +985,7 @@ class _TopBarBackButton extends StatelessWidget {
     return IconButton(
       onPressed: onPressed,
       icon: const Icon(Icons.arrow_back_ios_new_rounded),
-      color: const Color(0xFF0A2758),
+      color: Theme.of(context).colorScheme.primary,
       iconSize: 22,
       tooltip: tooltip,
     );
@@ -703,9 +1001,9 @@ class _TopBarLogo extends StatelessWidget {
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFE4EAF3)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0D0A2758),
@@ -778,16 +1076,17 @@ class _ReportTypeSegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Ink(
         height: 50,
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFF0F6FF) : Colors.white,
+          color: selected ? primary.withValues(alpha: 0.12) : Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? const Color(0xFF0A2758) : const Color(0xFFE4EAF3),
+            color: selected ? primary : Theme.of(context).colorScheme.outlineVariant,
             width: selected ? 2 : 1,
           ),
         ),
@@ -806,11 +1105,9 @@ class _ReportTypeSegment extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: selected
-                    ? const Color(0xFF0A2758)
-                    : const Color(0xFF64748B),
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                color: selected ? primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
               ),
             ),
           ],
@@ -821,10 +1118,11 @@ class _ReportTypeSegment extends StatelessWidget {
 }
 
 class _FormRowCard extends StatelessWidget {
-  const _FormRowCard({required this.label, required this.child});
+  const _FormRowCard({required this.label, required this.child, this.trailing});
 
   final String label;
   final Widget child;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -845,7 +1143,16 @@ class _FormRowCard extends StatelessWidget {
           if (shouldStack) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [FieldLabel(label), const SizedBox(height: 8), field],
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: FieldLabel(label)),
+                    ?trailing,
+                  ],
+                ),
+                const SizedBox(height: 8),
+                field,
+              ],
             );
           }
 
@@ -858,6 +1165,10 @@ class _FormRowCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(child: field),
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing!,
+              ],
             ],
           );
         },
@@ -1233,12 +1544,14 @@ class _DateTimeMiniIcon extends StatelessWidget {
 class _UploadArea extends StatelessWidget {
   const _UploadArea({
     required this.photoUrl,
+    required this.category,
     required this.hasError,
     required this.strings,
     required this.onTap,
   });
 
   final String? photoUrl;
+  final ItemCategory category;
   final bool hasError;
   final AppStrings strings;
   final VoidCallback onTap;
@@ -1247,14 +1560,14 @@ class _UploadArea extends StatelessWidget {
   Widget build(BuildContext context) {
     final borderColor = hasError
         ? const Color(0xFFE9435A)
-        : const Color(0xFFC7D2E2);
+        : Theme.of(context).colorScheme.outlineVariant;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Ink(
         height: 160,
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFD),
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: photoUrl == null ? Colors.transparent : borderColor,
@@ -1275,14 +1588,14 @@ class _UploadArea extends StatelessWidget {
                       Container(
                         width: 48,
                         height: 48,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFEAF0F7),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.photo_camera_outlined,
                           size: 24,
-                          color: Color(0xFF475569),
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -1292,7 +1605,7 @@ class _UploadArea extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
-                          color: const Color(0xFF0A2758),
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -1300,7 +1613,7 @@ class _UploadArea extends StatelessWidget {
                         strings.cameraGalleryHint,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF7B879D),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1316,7 +1629,7 @@ class _UploadArea extends StatelessWidget {
                     padding: const EdgeInsets.all(10),
                     child: PhotoPreview(
                       photoUrl: photoUrl!,
-                      category: ItemCategory.other,
+                      category: category,
                       size: 140,
                     ),
                   ),

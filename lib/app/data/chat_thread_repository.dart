@@ -182,6 +182,8 @@ class ChatThreadRepository extends ChangeNotifier {
   SharedPreferences? _prefs;
   bool _loaded = false;
 
+  void Function(ChatThread thread, ChatMessage message)? onIncomingMessage;
+
   bool get isLoaded => _loaded;
 
   List<ChatThread> get threads {
@@ -409,13 +411,15 @@ class ChatThreadRepository extends ChangeNotifier {
       status: ChatMessageStatus.delivered,
     );
     _typingThreadIds.remove(threadId);
-    _threads[index] = thread.copyWith(
+    final updatedThread = thread.copyWith(
       messages: [...thread.messages, response],
       updatedAt: now,
       unreadCount: thread.unreadCount + 1,
     );
+    _threads[index] = updatedThread;
     await _save();
     notifyListeners();
+    onIncomingMessage?.call(updatedThread, response);
   }
 
   String _autoResponseFor(ChatThread thread, String userText) {

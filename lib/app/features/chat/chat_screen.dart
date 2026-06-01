@@ -10,11 +10,13 @@ import '../../data/chat_thread_repository.dart';
 import '../../data/models.dart';
 import '../../shared/l10n/app_strings.dart';
 import '../../shared/widgets/common_widgets.dart';
+import '../profile/profile_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
     required this.repository,
+    required this.itemRepository,
     required this.threadId,
     required this.itemId,
     required this.otherUserId,
@@ -26,6 +28,7 @@ class ChatScreen extends StatefulWidget {
   });
 
   final ChatThreadRepository repository;
+  final ItemPostRepository itemRepository;
   final String threadId;
   final String itemId;
   final String otherUserId;
@@ -240,6 +243,20 @@ class _ChatScreenState extends State<ChatScreen> {
     return '${widget.strings.details} ${widget.itemId}';
   }
 
+  void _viewParticipantProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfileScreen(
+          strings: widget.strings,
+          repository: widget.itemRepository,
+          chatRepository: widget.repository,
+          userId: widget.otherUserId,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final typing = widget.repository.isTyping(widget.threadId);
@@ -264,6 +281,7 @@ class _ChatScreenState extends State<ChatScreen> {
           photoUrl: widget.itemPhotoUrl ?? '',
           category: widget.itemCategory,
           onTap: widget.onOpenItemDetails,
+          onProfileTap: _viewParticipantProfile,
         ),
         actions: [
           PopupMenuButton<_ChatMenuAction>(
@@ -439,14 +457,16 @@ class _PinnedItemContextCard extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFE4EAF3)),
-            boxShadow: const [
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            boxShadow: [
               BoxShadow(
-                color: Color(0x0D0A2758),
+                color: Theme.of(context).brightness == Brightness.light
+                    ? const Color(0x0D0A2758)
+                    : Colors.black.withValues(alpha: 0.15),
                 blurRadius: 12,
-                offset: Offset(0, 4),
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -457,7 +477,7 @@ class _PinnedItemContextCard extends StatelessWidget {
                     ? Icons.chevron_left_rounded
                     : Icons.chevron_right_rounded,
                 size: 22,
-                color: const Color(0xFF64748B),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -471,8 +491,8 @@ class _PinnedItemContextCard extends StatelessWidget {
                             title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF0A2758),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
                               fontSize: 14,
                               fontWeight: FontWeight.w900,
                             ),
@@ -577,6 +597,7 @@ class _ChatTitle extends StatelessWidget {
     required this.photoUrl,
     required this.category,
     required this.onTap,
+    required this.onProfileTap,
   });
 
   final String title;
@@ -584,52 +605,79 @@ class _ChatTitle extends StatelessWidget {
   final String photoUrl;
   final ItemCategory category;
   final Future<void> Function()? onTap;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap == null ? null : () => unawaited(onTap!()),
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-        child: Row(
-          children: [
-            PhotoPreview(
-              photoUrl: photoUrl,
-              category: category,
-              size: 44,
-              iconSize: 22,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: onProfileTap,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: PhotoPreview(
+                photoUrl: photoUrl,
+                category: category,
+                size: 44,
+                iconSize: 22,
+              ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: const Color(0xFF12233D),
-                      fontWeight: FontWeight.w900,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: onProfileTap,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 2),
+                ),
+                const SizedBox(height: 2),
+                if (onTap != null)
+                  GestureDetector(
+                    onTap: () => unawaited(onTap!()),
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  )
+                else
                   Text(
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF6C7892),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -640,22 +688,27 @@ class _SafetyNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF0F2C3A) : const Color(0xFFEAF7F9);
+    final border = isDark ? const Color(0xFF163E51) : const Color(0xFFD4EFF3);
+    final iconColor = isDark ? const Color(0xFF2DD4BF) : const Color(0xFF087889);
+    final textColor = isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0B6371);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF7F9),
+        color: bg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFD4EFF3)),
+        border: Border.all(color: border),
       ),
       child: Row(
         children: [
-          const Icon(Icons.shield_outlined, color: Color(0xFF087889), size: 18),
+          Icon(Icons.shield_outlined, color: iconColor, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               AppStrings.of(context).chatSafetyNote,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF0B6371),
+                color: textColor,
                 fontWeight: FontWeight.w800,
                 height: 1.25,
               ),
@@ -712,14 +765,16 @@ class _MessageBubble extends StatelessWidget {
                       end: Alignment.bottomRight,
                     )
                   : null,
-              color: mine ? null : Colors.white,
+              color: mine ? null : Theme.of(context).cardColor,
               borderRadius: radius,
-              border: mine ? null : Border.all(color: const Color(0xFFE3E8F1)),
-              boxShadow: const [
+              border: mine ? null : Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+              boxShadow: [
                 BoxShadow(
-                  color: Color(0x0D0A2758),
+                  color: Theme.of(context).brightness == Brightness.light
+                      ? const Color(0x0D0A2758)
+                      : Colors.black.withValues(alpha: 0.15),
                   blurRadius: 16,
-                  offset: Offset(0, 7),
+                  offset: const Offset(0, 7),
                 ),
               ],
             ),
@@ -735,7 +790,7 @@ class _MessageBubble extends StatelessWidget {
                   Text(
                     message.text,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: mine ? Colors.white : const Color(0xFF12233D),
+                      color: mine ? Colors.white : Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w700,
                       height: 1.35,
                     ),
@@ -947,33 +1002,88 @@ class _TypingBubble extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).cardColor,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(22),
                 topRight: Radius.circular(22),
                 bottomLeft: Radius.circular(6),
                 bottomRight: Radius.circular(22),
               ),
-              border: Border.all(color: const Color(0xFFE3E8F1)),
-              boxShadow: const [
+              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+              boxShadow: [
                 BoxShadow(
-                  color: Color(0x0D0A2758),
+                  color: Theme.of(context).brightness == Brightness.light
+                      ? const Color(0x0D0A2758)
+                      : Colors.black.withValues(alpha: 0.15),
                   blurRadius: 16,
-                  offset: Offset(0, 7),
+                  offset: const Offset(0, 7),
                 ),
               ],
             ),
-            child: const Text(
-              '...',
-              style: TextStyle(
-                color: Color(0xFF6C7892),
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                height: 0.8,
-              ),
-            ),
+            child: const _PulsingDots(),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PulsingDots extends StatefulWidget {
+  const _PulsingDots();
+
+  @override
+  State<_PulsingDots> createState() => _PulsingDotsState();
+}
+
+class _PulsingDotsState extends State<_PulsingDots> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dotColor = Theme.of(context).colorScheme.primary;
+    return SizedBox(
+      width: 28,
+      height: 12,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: List.generate(3, (index) {
+          return AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final delay = index * 0.2;
+              double progress = _controller.value - delay;
+              if (progress < 0) progress += 1.0;
+              final double value = (1.0 - (progress - 0.5).abs() * 2.0).clamp(0.0, 1.0);
+              final double translation = -5.0 * value;
+              return Transform.translate(
+                offset: Offset(0, translation),
+                child: Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: dotColor.withValues(alpha: 0.4 + 0.6 * value),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              );
+            },
+          );
+        }),
       ),
     );
   }
@@ -1003,14 +1113,16 @@ class _Composer extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: const Color(0xFFE4EAF3)),
-          boxShadow: const [
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          boxShadow: [
             BoxShadow(
-              color: Color(0x0F0A2758),
+              color: Theme.of(context).brightness == Brightness.light
+                  ? const Color(0x0F0A2758)
+                  : Colors.black.withValues(alpha: 0.15),
               blurRadius: 18,
-              offset: Offset(0, -4),
+              offset: const Offset(0, -4),
             ),
           ],
         ),
@@ -1037,15 +1149,15 @@ class _Composer extends StatelessWidget {
                 minLines: 1,
                 maxLines: 4,
                 textInputAction: TextInputAction.send,
-                style: const TextStyle(
-                  color: Color(0xFF111827),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
                 decoration: InputDecoration(
                   hintText: hintText,
-                  hintStyle: const TextStyle(
-                    color: Color(0xFF94A3B8),
+                  hintStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),

@@ -17,6 +17,8 @@ class ChatInboxScreen extends StatelessWidget {
     required this.itemRepository,
     required this.onLanguageToggle,
     required this.languageLabel,
+    this.onNotificationsTap,
+    this.hasUnreadNotifications = false,
   });
 
   final AppStrings strings;
@@ -24,6 +26,8 @@ class ChatInboxScreen extends StatelessWidget {
   final ItemPostRepository itemRepository;
   final VoidCallback onLanguageToggle;
   final String languageLabel;
+  final VoidCallback? onNotificationsTap;
+  final bool hasUnreadNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +43,8 @@ class ChatInboxScreen extends StatelessWidget {
                 subtitle: strings.appName,
                 onLanguageToggle: onLanguageToggle,
                 languageLabel: languageLabel,
+                onNotificationsTap: onNotificationsTap,
+                hasUnreadNotifications: hasUnreadNotifications,
               ),
             ),
           ),
@@ -89,6 +95,7 @@ class ChatInboxScreen extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           repository: chatRepository,
+          itemRepository: itemRepository,
           threadId: thread.id,
           itemId: thread.itemId,
           otherUserId: thread.participantId,

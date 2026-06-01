@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:lostandfound/l10n/generated/app_localizations.dart';
 
 import '../../data/models.dart';
+import '../../data/notification_repository.dart';
 
 String categoryIconLabel(ItemCategory category) => category.name;
 
@@ -326,4 +327,64 @@ class AppStrings {
   String get onboardingPage2Subtitle => _l10n.onboardingPage2Subtitle;
   String get onboardingPage3Title => _l10n.onboardingPage3Title;
   String get onboardingPage3Subtitle => _l10n.onboardingPage3Subtitle;
+
+  String get noNotifications => _l10n.noNotifications;
+  String get notificationsEmptyHint => _l10n.notificationsEmptyHint;
+  String get clearAll => _l10n.clearAll;
+  String get markAllRead => _l10n.markAllRead;
+  String get clearAllConfirm => _l10n.clearAllConfirm;
+  String get clearAllConfirmMessage => _l10n.clearAllConfirmMessage;
+  String get notificationDeleted => _l10n.notificationDeleted;
+  String get allNotificationsCleared => _l10n.allNotificationsCleared;
+  String get allNotificationsMarkedRead => _l10n.allNotificationsMarkedRead;
+}
+
+String notificationTitle(NotificationModel notification, AppStrings strings) {
+  if (strings.localeName != 'ar') return notification.title;
+  if (notification.id.startsWith('n-')) {
+    if (notification.type == NotificationType.chat) {
+      if (notification.title.startsWith('New message from')) {
+        final sender = notification.title.substring('New message from '.length);
+        return 'رسالة جديدة من $sender';
+      }
+      return 'رسالة جديدة';
+    }
+    if (notification.type == NotificationType.match) {
+      return 'تم العثور على مطابقة!';
+    }
+  }
+  return switch (notification.id) {
+    'n-001' => 'مطابقة محتملة!',
+    'n-002' => 'إعلان جديد بالقرب منك',
+    'n-003' => 'رسالة جديدة',
+    'n-004' => 'أهلاً بك في التطبيق',
+    _ => notification.title,
+  };
+}
+
+String notificationBody(NotificationModel notification, AppStrings strings) {
+  if (strings.localeName != 'ar') return notification.body;
+  if (notification.id.startsWith('n-')) {
+    if (notification.type == NotificationType.chat) {
+      return 'الرسالة: "${notification.body}"';
+    }
+    if (notification.type == NotificationType.match) {
+      if (notification.body.contains('matching your')) {
+        return notification.body
+            .replaceAll('Someone found an item matching your', 'عثر شخص ما على غرض يطابق')
+            .replaceAll('matching your', 'يطابق')
+            .replaceAll('at', 'في')
+            .replaceAll('A found', 'العنصر الموجود')
+            .replaceAll('matches a lost item reported near', 'يطابق غرضاً مفقوداً بالقرب من')
+            .replaceAll('!', '');
+      }
+    }
+  }
+  return switch (notification.id) {
+    'n-001' => 'قد يكون هناك من عثر على حقيبتك الزرقاء بالقرب من كلية الهندسة! انقر للتحقق.',
+    'n-002' => 'تم نشر عنصر جديد في الإلكترونيات بالقرب من المكتبة المركزية: "سماعات لاسلكية".',
+    'n-003' => 'أرسل لك موظف الأمن رسالة بخصوص مفاتيحك.',
+    'n-004' => 'مرحباً بك في تطبيق المفقودات! نتمنى لك العثور على ممتلكاتك.',
+    _ => notification.body,
+  };
 }

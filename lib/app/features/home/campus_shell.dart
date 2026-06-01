@@ -1,15 +1,19 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart' show CupertinoSliverRefreshControl;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../../data/chat_thread_repository.dart';
 import '../../data/models.dart';
+import '../../data/notification_repository.dart';
 import '../../shared/l10n/app_strings.dart';
 import '../../shared/widgets/common_widgets.dart';
 import '../add_item/add_item_screen.dart';
 import '../chat/chat_inbox_screen.dart';
 import '../details/item_details_screen.dart';
-import '../settings/settings_screen.dart';
+import '../notifications/notification_screen.dart';
+import '../profile/profile_screen.dart';
 
 class CampusShell extends StatefulWidget {
   const CampusShell({
@@ -36,6 +40,7 @@ class _CampusShellState extends State<CampusShell> {
   final TextEditingController _searchController = TextEditingController();
   final ItemPostRepository _repository = ItemPostRepository();
   final ChatThreadRepository _chatRepository = ChatThreadRepository();
+  final NotificationRepository _notificationRepository = NotificationRepository();
   late final PageController _pageController;
 
   int _visibleCount = 8;
@@ -61,6 +66,64 @@ class _CampusShellState extends State<CampusShell> {
       });
     });
     _chatRepository.addListener(_onRepositoryChanged);
+    _notificationRepository.addListener(_onRepositoryChanged);
+
+    // Setup background chat incoming message notification trigger
+    _chatRepository.onIncomingMessage = (thread, message) {
+      if (!mounted) return;
+      final senderName = thread.participantId == 'staff-42'
+          ? (strings.localeName == 'ar' ? 'مكتب الأمن' : 'Staff 42')
+          : thread.participantId;
+      unawaited(_notificationRepository.addNotification(
+        title: 'New message from $senderName',
+        body: message.text,
+        type: NotificationType.chat,
+        associatedItemId: thread.itemId,
+      ));
+    };
+
+    // Setup matching lost & found engine notification trigger
+    _repository.onPostAdded = (post) {
+      if (!mounted) return;
+      if (post.type == PostType.lost) {
+        final matches = _repository.posts.where((existing) =>
+          existing.type == PostType.found &&
+          existing.category == post.category
+        ).toList();
+
+        if (matches.isNotEmpty) {
+          final bestMatch = matches.first;
+          Future.delayed(const Duration(seconds: 2), () {
+            if (!mounted) return;
+            unawaited(_notificationRepository.addNotification(
+              title: 'Potential Match Found',
+              body: 'Someone found an item matching your "${post.title ?? post.description}" at ${bestMatch.location.placeLabel}!',
+              type: NotificationType.match,
+              associatedItemId: bestMatch.id,
+            ));
+          });
+        }
+      } else if (post.type == PostType.found) {
+        final matches = _repository.posts.where((existing) =>
+          existing.type == PostType.lost &&
+          existing.category == post.category
+        ).toList();
+
+        if (matches.isNotEmpty) {
+          final bestMatch = matches.first;
+          Future.delayed(const Duration(seconds: 2), () {
+            if (!mounted) return;
+            unawaited(_notificationRepository.addNotification(
+              title: 'Item Match Near You',
+              body: 'A found "${post.title ?? post.description}" matches a lost item reported near ${bestMatch.location.placeLabel}!',
+              type: NotificationType.match,
+              associatedItemId: bestMatch.id,
+            ));
+          });
+        }
+      }
+    };
+
     unawaited(_loadRepositories());
   }
 
@@ -68,6 +131,7 @@ class _CampusShellState extends State<CampusShell> {
   void dispose() {
     _repository.removeListener(_onRepositoryChanged);
     _chatRepository.removeListener(_onRepositoryChanged);
+    _notificationRepository.removeListener(_onRepositoryChanged);
     _pageController.dispose();
     _scrollController.dispose();
     _searchController.dispose();
@@ -77,6 +141,7 @@ class _CampusShellState extends State<CampusShell> {
   Future<void> _loadRepositories() async {
     await _repository.load();
     await _chatRepository.load(seedPosts: _repository.posts);
+    await _notificationRepository.load();
   }
 
   void _onRepositoryChanged() {
@@ -188,15 +253,6 @@ class _CampusShellState extends State<CampusShell> {
     });
   }
 
-  void _showComingSoon() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(strings.comingSoon),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   Future<void> _openExploreFeed({bool resetDiscovery = false}) async {
     if (resetDiscovery) {
       setState(() {
@@ -253,7 +309,7 @@ class _CampusShellState extends State<CampusShell> {
     return Directionality(
       textDirection: _arabic ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF7F9FC),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: PageView(
           controller: _pageController,
           physics: const BouncingScrollPhysics(),
@@ -263,12 +319,15 @@ class _CampusShellState extends State<CampusShell> {
             _buildFavoritesView(),
             _buildMyPostsView(),
             _buildChatListView(),
-            SettingsScreen(
+            ProfileScreen(
               strings: strings,
               locale: widget.locale,
               themeMode: widget.themeMode,
               onLocaleChanged: widget.onLocaleChanged,
               onThemeModeChanged: widget.onThemeModeChanged,
+              onToggleLanguage: widget.onToggleLanguage,
+              repository: _repository,
+              chatRepository: _chatRepository,
             ),
           ],
         ),
@@ -276,19 +335,19 @@ class _CampusShellState extends State<CampusShell> {
           onPressed: _openAddItem,
           icon: const Icon(Icons.add_rounded),
           label: Text(strings.add),
-          backgroundColor: const Color(0xFF1D4ED8),
-          foregroundColor: Colors.white,
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Theme.of(context).colorScheme.onPrimary,
         ),
         bottomNavigationBar: NavigationBarTheme(
           data: NavigationBarThemeData(
-            backgroundColor: Colors.white,
-            indicatorColor: const Color(0xFFDBEAFE),
+            backgroundColor: Theme.of(context).cardColor,
+            indicatorColor: Theme.of(context).colorScheme.primaryContainer,
             labelTextStyle: WidgetStateProperty.resolveWith((states) {
               final selected = states.contains(WidgetState.selected);
               return TextStyle(
                 color: selected
-                    ? const Color(0xFF1D4ED8)
-                    : const Color(0xFF6B7280),
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
               );
@@ -297,8 +356,8 @@ class _CampusShellState extends State<CampusShell> {
               final selected = states.contains(WidgetState.selected);
               return IconThemeData(
                 color: selected
-                    ? const Color(0xFF1D4ED8)
-                    : const Color(0xFF6B7280),
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
                 size: 24,
               );
             }),
@@ -332,9 +391,9 @@ class _CampusShellState extends State<CampusShell> {
                 label: strings.chat,
               ),
               NavigationDestination(
-                icon: const Icon(Icons.settings_outlined),
-                selectedIcon: const Icon(Icons.settings_rounded),
-                label: strings.settings,
+                icon: const Icon(Icons.person_outline_rounded),
+                selectedIcon: const Icon(Icons.person_rounded),
+                label: strings.profile,
               ),
             ],
           ),
@@ -348,6 +407,22 @@ class _CampusShellState extends State<CampusShell> {
       child: CustomScrollView(
         controller: _scrollController,
         slivers: [
+          CupertinoSliverRefreshControl(
+            onRefresh: () async {
+              await HapticFeedback.lightImpact();
+              await Future<void>.delayed(const Duration(milliseconds: 1200));
+              await HapticFeedback.mediumImpact();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(_arabic ? 'تم تحديث البلاغات بنجاح!' : 'Campus feed updated successfully!'),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              }
+            },
+          ),
           SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -355,7 +430,8 @@ class _CampusShellState extends State<CampusShell> {
                 PremiumHomeHeader(
                   title: _arabic ? 'مفقودات وموجودات' : 'Lost & Found',
                   subtitle: _arabic ? 'مجتمع جامعتنا' : strings.splashSubtitle,
-                  onNotificationsTap: _showComingSoon,
+                  onNotificationsTap: _openNotifications,
+                  hasUnreadNotifications: _notificationRepository.unreadCount > 0,
                 ),
                 PremiumHomeSearchBar(
                   controller: _searchController,
@@ -428,11 +504,14 @@ class _CampusShellState extends State<CampusShell> {
                   }
                   final visible = _filteredPosts.take(_visibleCount).toList();
                   final post = visible[index];
-                  return ItemPostCard(
-                    post: post,
-                    strings: strings,
-                    onTap: () => _openDetails(post),
-                    onFavorite: () => _toggleFavorite(post),
+                  return FadeInSlide(
+                    delay: Duration(milliseconds: (index % 6) * 80),
+                    child: ItemPostCard(
+                      post: post,
+                      strings: strings,
+                      onTap: () => _openDetails(post),
+                      onFavorite: () => _toggleFavorite(post),
+                    ),
                   );
                 },
               ),
@@ -458,6 +537,8 @@ class _CampusShellState extends State<CampusShell> {
                     subtitle: strings.appName,
                     onLanguageToggle: widget.onToggleLanguage,
                     languageLabel: _arabic ? 'EN' : 'AR',
+                    onNotificationsTap: _openNotifications,
+                    hasUnreadNotifications: _notificationRepository.unreadCount > 0,
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -493,11 +574,14 @@ class _CampusShellState extends State<CampusShell> {
                     const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   final post = posts[index];
-                  return ItemPostCard(
-                    post: post,
-                    strings: strings,
-                    onTap: () => _openDetails(post),
-                    onFavorite: () => _toggleFavorite(post),
+                  return FadeInSlide(
+                    delay: Duration(milliseconds: (index % 6) * 80),
+                    child: ItemPostCard(
+                      post: post,
+                      strings: strings,
+                      onTap: () => _openDetails(post),
+                      onFavorite: () => _toggleFavorite(post),
+                    ),
                   );
                 },
               ),
@@ -520,6 +604,8 @@ class _CampusShellState extends State<CampusShell> {
                 subtitle: strings.appName,
                 onLanguageToggle: widget.onToggleLanguage,
                 languageLabel: _arabic ? 'EN' : 'AR',
+                onNotificationsTap: _openNotifications,
+                hasUnreadNotifications: _notificationRepository.unreadCount > 0,
               ),
             ),
           ),
@@ -543,11 +629,14 @@ class _CampusShellState extends State<CampusShell> {
                     const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   final post = posts[index];
-                  return ItemPostCard(
-                    post: post,
-                    strings: strings,
-                    onTap: () => _openDetails(post),
-                    onFavorite: () => _toggleFavorite(post),
+                  return FadeInSlide(
+                    delay: Duration(milliseconds: (index % 6) * 80),
+                    child: ItemPostCard(
+                      post: post,
+                      strings: strings,
+                      onTap: () => _openDetails(post),
+                      onFavorite: () => _toggleFavorite(post),
+                    ),
                   );
                 },
               ),
@@ -564,6 +653,21 @@ class _CampusShellState extends State<CampusShell> {
       itemRepository: _repository,
       onLanguageToggle: widget.onToggleLanguage,
       languageLabel: _arabic ? 'EN' : 'AR',
+      onNotificationsTap: _openNotifications,
+      hasUnreadNotifications: _notificationRepository.unreadCount > 0,
+    );
+  }
+
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NotificationScreen(
+          repository: _notificationRepository,
+          itemRepository: _repository,
+          chatRepository: _chatRepository,
+        ),
+      ),
     );
   }
 }
@@ -680,11 +784,6 @@ class FilterSheet extends StatefulWidget {
 class _FilterSheetState extends State<FilterSheet> {
   late FilterState _draft = widget.initial;
 
-  static const Color _primary = Color(0xFF102A5C);
-  static const Color _surface = Color(0xFFF7FAFF);
-  static const Color _border = Color(0xFFD6E0F0);
-  static const Color _text = Color(0xFF334155);
-
   void _selectStatus(PostStatus? status) {
     setState(() {
       _draft = _draft.copyWith(status: status, clearStatus: status == null);
@@ -699,17 +798,25 @@ class _FilterSheetState extends State<FilterSheet> {
   Widget build(BuildContext context) {
     final strings = widget.strings;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    
+    final primary = Theme.of(context).colorScheme.primary;
+    final surface = Theme.of(context).inputDecorationTheme.fillColor ?? Theme.of(context).colorScheme.surfaceContainerHighest;
+    final border = Theme.of(context).colorScheme.outlineVariant;
+    final text = Theme.of(context).colorScheme.onSurface;
+
     return Material(
       color: Colors.transparent,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           boxShadow: [
             BoxShadow(
-              color: Color(0x1A102A5C),
+              color: Theme.of(context).brightness == Brightness.light
+                  ? const Color(0x1A102A5C)
+                  : Colors.black.withValues(alpha: 0.3),
               blurRadius: 28,
-              offset: Offset(0, -8),
+              offset: const Offset(0, -8),
             ),
           ],
         ),
@@ -728,7 +835,7 @@ class _FilterSheetState extends State<FilterSheet> {
                       strings.filters,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w900,
-                        color: _primary,
+                        color: primary,
                       ),
                     ),
                     const Spacer(),
@@ -748,7 +855,7 @@ class _FilterSheetState extends State<FilterSheet> {
                   children: [
                     _StatusChip(
                       label: strings.allStatuses,
-                      dotColor: _primary,
+                      dotColor: primary,
                       selected: _draft.status == null,
                       onTap: () => _selectStatus(null),
                     ),
@@ -787,7 +894,7 @@ class _FilterSheetState extends State<FilterSheet> {
                         icon: categoryIcon(category),
                         selected: _draft.category == category,
                         onTap: () => setState(
-                          () => _draft = _draft.copyWith(category: category),
+                           () => _draft = _draft.copyWith(category: category),
                         ),
                       );
                     }),
@@ -806,7 +913,7 @@ class _FilterSheetState extends State<FilterSheet> {
                     children: DateFilter.values.map((filter) {
                       return RadioListTile<DateFilter>(
                         value: filter,
-                        activeColor: _primary,
+                        activeColor: primary,
                         contentPadding: EdgeInsets.zero,
                         dense: true,
                         visualDensity: VisualDensity.compact,
@@ -816,7 +923,7 @@ class _FilterSheetState extends State<FilterSheet> {
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 fontWeight: FontWeight.w700,
-                                color: _text,
+                                color: text,
                               ),
                         ),
                       );
@@ -834,18 +941,18 @@ class _FilterSheetState extends State<FilterSheet> {
                     hintText: strings.allLocations,
                     prefixIcon: const Icon(Icons.place_outlined),
                     filled: true,
-                    fillColor: _surface,
+                    fillColor: surface,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: _border),
+                      borderSide: BorderSide(color: border),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: _border),
+                      borderSide: BorderSide(color: border),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: _primary, width: 1.4),
+                      borderSide: BorderSide(color: primary, width: 1.4),
                     ),
                   ),
                   icon: const Icon(Icons.keyboard_arrow_down_rounded),
@@ -879,8 +986,8 @@ class _FilterSheetState extends State<FilterSheet> {
                         label: Text(strings.reset),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(54),
-                          foregroundColor: _primary,
-                          side: const BorderSide(color: _border),
+                          foregroundColor: primary,
+                          side: BorderSide(color: border),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -895,7 +1002,7 @@ class _FilterSheetState extends State<FilterSheet> {
                         label: Text(strings.apply),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(54),
-                          backgroundColor: _primary,
+                          backgroundColor: primary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -925,7 +1032,7 @@ class _SectionHeader extends StatelessWidget {
       title,
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
         fontWeight: FontWeight.w900,
-        color: const Color(0xFF102A5C),
+        color: Theme.of(context).colorScheme.primary,
       ),
     );
   }
@@ -946,8 +1053,9 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFF102A5C);
-    const border = Color(0xFFD6E0F0);
+    final primary = Theme.of(context).colorScheme.primary;
+    final border = Theme.of(context).colorScheme.outlineVariant;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return ChoiceChip(
       selected: selected,
       showCheckmark: false,
@@ -960,9 +1068,9 @@ class _StatusChip extends StatelessWidget {
       label: Text(label),
       labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
         fontWeight: FontWeight.w800,
-        color: selected ? primary : const Color(0xFF334155),
+        color: selected ? primary : onSurface,
       ),
-      backgroundColor: const Color(0xFFF7FAFF),
+      backgroundColor: Theme.of(context).cardColor,
       selectedColor: dotColor.withValues(alpha: 0.12),
       side: BorderSide(color: selected ? dotColor : border),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
@@ -987,8 +1095,9 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFF102A5C);
-    const border = Color(0xFFD6E0F0);
+    final primary = Theme.of(context).colorScheme.primary;
+    final border = Theme.of(context).colorScheme.outlineVariant;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return ChoiceChip(
       selected: selected,
       showCheckmark: false,
@@ -996,15 +1105,15 @@ class _CategoryChip extends StatelessWidget {
       avatar: Icon(
         icon,
         size: 18,
-        color: selected ? primary : const Color(0xFF64748B),
+        color: selected ? primary : Theme.of(context).colorScheme.onSurfaceVariant,
       ),
       label: Text(label),
       labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
         fontWeight: FontWeight.w800,
-        color: selected ? primary : const Color(0xFF334155),
+        color: selected ? primary : onSurface,
       ),
-      backgroundColor: Colors.white,
-      selectedColor: const Color(0xFFE9F0FF),
+      backgroundColor: Theme.of(context).cardColor,
+      selectedColor: primary.withValues(alpha: 0.12),
       side: BorderSide(color: selected ? primary : border),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

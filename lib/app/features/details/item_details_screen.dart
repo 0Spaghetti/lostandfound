@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 
 import '../../data/chat_thread_repository.dart';
 import '../../data/models.dart';
@@ -8,6 +9,7 @@ import '../../shared/l10n/app_strings.dart';
 import '../../shared/widgets/common_widgets.dart';
 import '../add_item/add_item_screen.dart';
 import '../chat/chat_screen.dart';
+import '../profile/profile_screen.dart';
 
 class ItemDetailsScreen extends StatefulWidget {
   const ItemDetailsScreen({
@@ -215,6 +217,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           repository: widget.chatRepository,
+          itemRepository: widget.repository,
           threadId: thread.id,
           itemId: post.id,
           otherUserId: thread.participantId,
@@ -273,10 +276,17 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
   }
 
   void _viewProfile() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(widget.strings.viewProfile),
-        behavior: SnackBarBehavior.floating,
+    final post = _post;
+    if (post == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfileScreen(
+          strings: widget.strings,
+          repository: widget.repository,
+          chatRepository: widget.chatRepository,
+          userId: post.createdBy.userId,
+        ),
       ),
     );
   }
@@ -285,7 +295,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
   Widget build(BuildContext context) {
     final post = _post;
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(widget.strings.details),
         centerTitle: true,
@@ -379,13 +389,16 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
           : SafeArea(
               child: Container(
                 padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
                   boxShadow: [
                     BoxShadow(
-                      color: Color(0x140A2758),
+                      color: Theme.of(context).brightness == Brightness.light
+                          ? const Color(0x140A2758)
+                          : Colors.black.withValues(alpha: 0.15),
                       blurRadius: 18,
-                      offset: Offset(0, -4),
+                      offset: const Offset(0, -4),
                     ),
                   ],
                 ),
@@ -398,8 +411,8 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                         label: Text(widget.strings.chat),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(56),
-                          backgroundColor: const Color(0xFF102A5C),
-                          foregroundColor: Colors.white,
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -411,7 +424,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                       onPressed: _toggleFavorite,
                       style: IconButton.styleFrom(
                         minimumSize: const Size(56, 56),
-                        backgroundColor: const Color(0xFFF6F8FC),
+                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       ),
                       icon: Icon(
                         post.isFavorite
@@ -419,7 +432,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                             : Icons.favorite_border_rounded,
                         color: post.isFavorite
                             ? const Color(0xFFE9435A)
-                            : const Color(0xFF102A5C),
+                            : Theme.of(context).colorScheme.primary,
                       ),
                     ),
                   ],
@@ -477,9 +490,9 @@ class _DetailsBody extends StatelessWidget {
       ),
       Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFE4EAF3)),
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         ),
         padding: const EdgeInsets.all(18),
         child: _PosterSummary(
@@ -645,14 +658,14 @@ class _DetailsBody extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFE4EAF3)),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: Text(
             itemPostDescription(post, strings),
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: const Color(0xFF334155),
+              color: Theme.of(context).colorScheme.onSurface,
               height: 1.45,
             ),
           ),
@@ -714,7 +727,7 @@ class _OverlayPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
+        color: Theme.of(context).cardColor.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(999),
         boxShadow: const [
           BoxShadow(
@@ -738,16 +751,16 @@ class DetailPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE4EAF3)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(
         children: [
           for (var i = 0; i < children.length; i++) ...[
             children[i],
             if (i != children.length - 1)
-              const Divider(height: 1, indent: 16, endIndent: 16),
+              Divider(height: 1, indent: 16, endIndent: 16, color: Theme.of(context).colorScheme.outlineVariant),
           ],
         ],
       ),
@@ -778,7 +791,7 @@ class DetailRow extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF64748B),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -822,12 +835,21 @@ class _PosterCard extends StatelessWidget {
               .map((part) => part[0].toUpperCase())
               .join();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE4EAF3)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black.withValues(alpha: 0.15) : const Color(0x060A2758),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -864,7 +886,40 @@ class _PosterCard extends StatelessWidget {
               ],
             ),
           ),
-          TextButton(onPressed: onTap, child: Text(strings.viewProfile)),
+          if (post.createdBy.contactMethod != null && post.createdBy.contactMethod!.isNotEmpty) ...[
+            IconButton(
+              icon: const Icon(Icons.copy_all_rounded, size: 20),
+              tooltip: strings.copy,
+              style: IconButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.primary,
+                backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                minimumSize: const Size(36, 36),
+                padding: EdgeInsets.zero,
+              ),
+              onPressed: () async {
+                final contact = post.createdBy.contactMethod!;
+                await Clipboard.setData(ClipboardData(text: contact));
+                await HapticFeedback.lightImpact();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(strings.localeName == 'ar' ? 'تم نسخ جهة الاتصال!' : 'Contact copied to clipboard!'),
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 1),
+                    ),
+                  );
+                }
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
+          TextButton(
+            onPressed: onTap,
+            style: TextButton.styleFrom(
+              textStyle: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            child: Text(strings.viewProfile),
+          ),
         ],
       ),
     );

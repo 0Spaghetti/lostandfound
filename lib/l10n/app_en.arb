@@ -183,5 +183,14 @@
   "onboardingPage2Title": "Use photo + location to match items",
   "onboardingPage2Subtitle": "A clear photo and a precise place make searching and matching easier for everyone.",
   "onboardingPage3Title": "Chat securely with the poster",
-  "onboardingPage3Subtitle": "Coordinate the return in-app while keeping personal information private."
+  "onboardingPage3Subtitle": "Coordinate the return in-app while keeping personal information private.",
+  "noNotifications": "No notifications yet",
+  "notificationsEmptyHint": "You'll be notified when matches or updates are found.",
+  "clearAll": "Clear All",
+  "markAllRead": "Mark all as read",
+  "clearAllConfirm": "Clear all notifications?",
+  "clearAllConfirmMessage": "This action cannot be undone.",
+  "notificationDeleted": "Notification deleted",
+  "allNotificationsCleared": "All notifications cleared",
+  "allNotificationsMarkedRead": "All notifications marked as read"
 }

@@ -408,10 +408,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
           child: Column(
             children: [
-              const SizedBox(height: 8),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: _pageIndex < pages.length - 1
+                    ? TextButton(
+                        onPressed: () {
+                          _pageController.animateToPage(
+                            pages.length - 1,
+                            duration: const Duration(milliseconds: 450),
+                            curve: Curves.easeInOutCubic,
+                          );
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF53657E),
+                          minimumSize: const Size(0, 40),
+                        ),
+                        child: Text(
+                          strings.skip,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
+                          ),
+                        ),
+                      )
+                    : const SizedBox(height: 40), // Stable alignment height
+              ),
+              const SizedBox(height: 4),
               Text(
                 strings.onboardingWelcomeTitle,
                 textAlign: TextAlign.center,
@@ -431,7 +456,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               Expanded(
                 child: PageView.builder(
                   controller: _pageController,
@@ -446,7 +471,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               _PageDots(total: pages.length, activeIndex: _pageIndex),
               const SizedBox(height: 20),
               FilledButton(
-                onPressed: () => _showLocationPermissionSheet(strings),
+                onPressed: () {
+                  if (_pageIndex < pages.length - 1) {
+                    _pageController.nextPage(
+                      duration: const Duration(milliseconds: 380),
+                      curve: Curves.easeInOutCubic,
+                    );
+                  } else {
+                    _showLocationPermissionSheet(strings);
+                  }
+                },
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(56),
                   backgroundColor: const Color(0xFF1D55D8),
@@ -456,11 +490,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   elevation: 0,
                 ),
-                child: Text(
-                  strings.getStarted,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  transitionBuilder: (child, animation) {
+                    return ScaleTransition(scale: animation, child: child);
+                  },
+                  child: Text(
+                    _pageIndex < pages.length - 1 ? strings.next : strings.getStarted,
+                    key: ValueKey<int>(_pageIndex < pages.length - 1 ? 0 : 1),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ),

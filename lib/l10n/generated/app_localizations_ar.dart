@@ -551,4 +551,32 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get onboardingPage3Subtitle =>
       'تواصل داخل التطبيق لتنسيق الاستلام مع الحفاظ على الخصوصية.';
+
+  @override
+  String get noNotifications => 'لا توجد إشعارات بعد';
+
+  @override
+  String get notificationsEmptyHint =>
+      'سنقوم بإشعارك عند العثور على مطابقات أو تحديثات.';
+
+  @override
+  String get clearAll => 'مسح الكل';
+
+  @override
+  String get markAllRead => 'تحديد الكل كمقروء';
+
+  @override
+  String get clearAllConfirm => 'مسح جميع الإشعارات؟';
+
+  @override
+  String get clearAllConfirmMessage => 'لا يمكن التراجع عن هذا الإجراء.';
+
+  @override
+  String get notificationDeleted => 'تم حذف الإشعار';
+
+  @override
+  String get allNotificationsCleared => 'تم مسح جميع الإشعارات';
+
+  @override
+  String get allNotificationsMarkedRead => 'تم تحديد جميع الإشعارات كمقروءة';
 }

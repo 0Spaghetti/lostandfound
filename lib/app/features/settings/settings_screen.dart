@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../shared/l10n/app_strings.dart';
-import '../../shared/widgets/common_widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -15,6 +14,9 @@ class SettingsScreen extends StatefulWidget {
     required this.themeMode,
     required this.onLocaleChanged,
     required this.onThemeModeChanged,
+    this.onToggleLanguage,
+    this.onNotificationsTap,
+    this.hasUnreadNotifications = false,
   });
 
   final AppStrings strings;
@@ -22,6 +24,9 @@ class SettingsScreen extends StatefulWidget {
   final ThemeMode themeMode;
   final ValueChanged<Locale> onLocaleChanged;
   final ValueChanged<ThemeMode> onThemeModeChanged;
+  final VoidCallback? onToggleLanguage;
+  final VoidCallback? onNotificationsTap;
+  final bool hasUnreadNotifications;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -30,12 +35,10 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   static const _notificationsKey = 'settings_notifications_enabled';
   static const _locationKey = 'settings_location_enabled';
-  static const _signedInKey = 'settings_signed_in';
   static const _settingsChannel = MethodChannel('lostandfound/settings');
 
   bool _notificationsEnabled = true;
   bool _locationEnabled = false;
-  bool _signedIn = true;
 
   @override
   void initState() {
@@ -49,7 +52,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _notificationsEnabled = prefs.getBool(_notificationsKey) ?? true;
       _locationEnabled = prefs.getBool(_locationKey) ?? false;
-      _signedIn = prefs.getBool(_signedInKey) ?? true;
     });
   }
 
@@ -79,192 +81,276 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _setSignedIn(bool value) async {
-    setState(() => _signedIn = value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_signedInKey, value);
-    _showSnack(value ? widget.strings.signIn : widget.strings.signedOut);
-  }
-
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
 
-  void _showComingSoon() {
-    _showSnack(widget.strings.comingSoon);
+  void _showFaqDialog() {
+    final isArabic = widget.locale.languageCode == 'ar';
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return Directionality(
+          textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                const Icon(Icons.help_outline_rounded, color: Color(0xFF1D4ED8)),
+                const SizedBox(width: 8),
+                Text(
+                  widget.strings.helpFaq,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  _buildFaqItem(
+                    isArabic ? 'س: أين يمكنني استلام البلاغات المستلمة؟' : 'Q: Where can I collect claimed items?',
+                    isArabic 
+                        ? 'ج: يرجى زيارة البوابة الرئيسية - مبنى 2، مكتب الاستقبال أو مكتب الأمن بوزارة الحرس الجامعي.' 
+                        : 'A: Visit the Main Gate Building 2 Front Desk or the Campus Security Office.',
+                  ),
+                  const Divider(),
+                  _buildFaqItem(
+                    isArabic ? 'س: ماذا أحتاج لإثبات ملكية غرض؟' : 'Q: What do I need to prove ownership?',
+                    isArabic
+                        ? 'ج: ستحتاج لإبراز بطاقة جامعية صالحة ووصف علامة مميزة داخل الغرض.'
+                        : 'A: You must show a valid Student/Staff ID card and describe a unique detail or contents inside the item.',
+                  ),
+                  const Divider(),
+                  _buildFaqItem(
+                    isArabic ? 'س: كم من الوقت يتم الاحتفاظ بالمفقودات؟' : 'Q: How long are found items kept?',
+                    isArabic
+                        ? 'ج: يتم الاحتفاظ بجميع الموجودات لمدة 90 يوماً قبل التبرع بها أو التخلص منها طبقاً للوائح الجامعة.'
+                        : 'A: Items are held for up to 90 days before being donated or disposed of in accordance with campus policies.',
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(isArabic ? 'إغلاق' : 'Close'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final strings = widget.strings;
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 112),
+  Widget _buildFaqItem(String question, String answer) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          HeaderBar(
-            title: strings.settings,
-            subtitle: strings.appName,
-            onLanguageToggle: _showComingSoon,
-            languageLabel: '',
+          Text(
+            question,
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF1D4ED8)),
           ),
-          const SizedBox(height: 22),
-          _ProfileCard(
-            signedIn: _signedIn,
-            strings: strings,
-            onEdit: _showComingSoon,
-          ),
-          const SizedBox(height: 28),
-          _SectionLabel(label: strings.preferences),
-          const SizedBox(height: 10),
-          _SettingsGroup(
-            children: [
-              _SettingsSwitchTile(
-                icon: Icons.notifications_none_rounded,
-                title: strings.notifications,
-                value: _notificationsEnabled,
-                onChanged: (value) => unawaited(_setNotifications(value)),
-              ),
-              _SettingsSwitchTile(
-                icon: Icons.location_on_outlined,
-                title: strings.locationServices,
-                subtitle: strings.locationServicesStatus,
-                value: _locationEnabled,
-                onChanged: (value) => unawaited(_setLocation(value)),
-                onTap: _openSystemSettings,
-              ),
-              _LanguageTile(
-                strings: strings,
-                locale: widget.locale,
-                onChanged: widget.onLocaleChanged,
-              ),
-              _ThemeTile(
-                strings: strings,
-                value: widget.themeMode,
-                onChanged: widget.onThemeModeChanged,
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-          _SectionLabel(label: strings.safetySupport),
-          const SizedBox(height: 10),
-          _SettingsGroup(
-            children: [
-              _SettingsActionTile(
-                icon: Icons.help_outline_rounded,
-                title: strings.helpFaq,
-                onTap: _showComingSoon,
-              ),
-              _SettingsActionTile(
-                icon: Icons.report_problem_outlined,
-                title: strings.reportProblem,
-                onTap: _showComingSoon,
-              ),
-              _SettingsActionTile(
-                icon: Icons.privacy_tip_outlined,
-                title: strings.termsPrivacy,
-                onTap: _showComingSoon,
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-          _SectionLabel(label: strings.account),
-          const SizedBox(height: 10),
-          _AccountButton(
-            label: _signedIn ? strings.signOut : strings.signIn,
-            signedIn: _signedIn,
-            onPressed: () => unawaited(_setSignedIn(!_signedIn)),
+          const SizedBox(height: 4),
+          Text(
+            answer,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, height: 1.3),
           ),
         ],
       ),
     );
   }
-}
 
-class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({
-    required this.signedIn,
-    required this.strings,
-    required this.onEdit,
-  });
+  void _showReportProblemDialog() {
+    final isArabic = widget.locale.languageCode == 'ar';
+    final problemController = TextEditingController();
 
-  final bool signedIn;
-  final AppStrings strings;
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    final name = signedIn ? strings.demoUserName : strings.continueAsGuest;
-    final email = signedIn ? strings.demoUserEmail : strings.signIn;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: _cardDecoration(),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 36,
-            backgroundColor: const Color(0xFFE8EEF7),
-            child: Icon(
-              signedIn ? Icons.person_rounded : Icons.person_outline_rounded,
-              color: const Color(0xFF1D55D8),
-              size: 34,
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return Directionality(
+          textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(
+              widget.strings.reportProblem,
+              style: const TextStyle(fontWeight: FontWeight.w900),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  isArabic ? 'صف المشكلة أو الملاحظات بالتفصيل:' : 'Describe the problem or feedback in detail:',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  email,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w600,
+                const SizedBox(height: 10),
+                TextField(
+                  controller: problemController,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    hintText: isArabic ? 'اكتب هنا...' : 'Write here...',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                ),
-                const SizedBox(height: 7),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.verified_user_outlined,
-                      size: 18,
-                      color: Color(0xFF1D55D8),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        strings.demoUniversity,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF53657E),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(widget.strings.cancel),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final text = problemController.text.trim();
+                  if (text.isEmpty) {
+                    _showSnack(isArabic ? 'الرجاء كتابة تفاصيل المشكلة' : 'Please describe the problem');
+                    return;
+                  }
+                  Navigator.pop(context);
+                  _showSnack(isArabic ? 'شكرًا لك! تم إرسال تقريرك للدعم.' : 'Thank you! Your feedback has been sent to support.');
+                },
+                child: Text(isArabic ? 'إرسال' : 'Submit'),
+              ),
+            ],
           ),
-          IconButton(
-            onPressed: onEdit,
-            tooltip: strings.editProfile,
-            icon: const Icon(Icons.chevron_right_rounded),
+        );
+      },
+    );
+  }
+
+  void _showTermsDialog() {
+    final isArabic = widget.locale.languageCode == 'ar';
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return Directionality(
+          textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(
+              widget.strings.termsPrivacy,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  Text(
+                    isArabic ? 'شروط الخدمة والخصوصية' : 'Terms & Privacy Policy',
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF1D4ED8)),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    isArabic
+                        ? '1. السلامة أولاً: تقابل دائماً في أماكن عامة ومضاءة داخل الحرم الجامعي (مثل مركز الطلبة).\n'
+                          '2. الخصوصية: لا تقم بمشاركة أرقام الهاتف الشخصية أو كلمات المرور.\n'
+                          '3. المسؤولية: الجامعة لا تتحمل أي مسؤولية عن الممتلكات المتبادلة أو المفقودة بين الأطراف.'
+                        : '1. Safety First: Always arrange meetups in well-lit, public campus locations (e.g., Student Center).\n'
+                          '2. Privacy: Do not share personal phone numbers, bank details, or passwords.\n'
+                          '3. Liability: The university is not liable for items traded, resolved, or exchanged between community members.',
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(isArabic ? 'حسناً' : 'OK'),
+              ),
+            ],
           ),
-        ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = widget.strings;
+    final isArabic = widget.locale.languageCode == 'ar';
+    return Directionality(
+      textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: Text(
+            strings.settings,
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
+          ),
+          centerTitle: false,
+          elevation: 0,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          children: [
+            _SectionLabel(label: strings.preferences),
+            const SizedBox(height: 10),
+            _SettingsGroup(
+              children: [
+                _SettingsSwitchTile(
+                  icon: Icons.notifications_none_rounded,
+                  title: strings.notifications,
+                  value: _notificationsEnabled,
+                  onChanged: (value) => unawaited(_setNotifications(value)),
+                ),
+                _SettingsSwitchTile(
+                  icon: Icons.location_on_outlined,
+                  title: strings.locationServices,
+                  subtitle: strings.locationServicesStatus,
+                  value: _locationEnabled,
+                  onChanged: (value) => unawaited(_setLocation(value)),
+                  onTap: _openSystemSettings,
+                ),
+                _LanguageTile(
+                  strings: strings,
+                  locale: widget.locale,
+                  onChanged: widget.onLocaleChanged,
+                ),
+                _ThemeTile(
+                  strings: strings,
+                  value: widget.themeMode,
+                  onChanged: widget.onThemeModeChanged,
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            _SectionLabel(label: strings.safetySupport),
+            const SizedBox(height: 10),
+            _SettingsGroup(
+              children: [
+                _SettingsActionTile(
+                  icon: Icons.help_outline_rounded,
+                  title: strings.helpFaq,
+                  onTap: _showFaqDialog,
+                ),
+                _SettingsActionTile(
+                  icon: Icons.report_problem_outlined,
+                  title: strings.reportProblem,
+                  onTap: _showReportProblemDialog,
+                ),
+                _SettingsActionTile(
+                  icon: Icons.privacy_tip_outlined,
+                  title: strings.termsPrivacy,
+                  onTap: _showTermsDialog,
+                ),
+              ],
+            ),
+            const SizedBox(height: 40),
+          ],
+        ),
       ),
     );
   }
@@ -299,13 +385,13 @@ class _SettingsGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: _cardDecoration(),
+      decoration: _cardDecoration(context),
       child: Column(
         children: [
           for (var i = 0; i < children.length; i++) ...[
             children[i],
             if (i != children.length - 1)
-              const Divider(height: 1, indent: 72, endIndent: 18),
+              Divider(height: 1, indent: 72, endIndent: 18, color: Theme.of(context).colorScheme.outlineVariant),
           ],
         ],
       ),
@@ -332,10 +418,11 @@ class _SettingsSwitchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
     return ListTile(
       minLeadingWidth: 32,
       contentPadding: const EdgeInsetsDirectional.only(start: 18, end: 16),
-      leading: Icon(icon, color: const Color(0xFF1D55D8), size: 30),
+      leading: Icon(icon, color: primary, size: 30),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
       subtitle: subtitle == null
           ? null
@@ -344,7 +431,7 @@ class _SettingsSwitchTile extends StatelessWidget {
         value: value,
         onChanged: onChanged,
         activeThumbColor: Colors.white,
-        activeTrackColor: const Color(0xFF1D55D8),
+        activeTrackColor: primary,
       ),
       onTap: onTap,
     );
@@ -367,7 +454,7 @@ class _SettingsActionTile extends StatelessWidget {
     return ListTile(
       minLeadingWidth: 32,
       contentPadding: const EdgeInsetsDirectional.only(start: 18, end: 16),
-      leading: Icon(icon, color: const Color(0xFF1D55D8), size: 30),
+      leading: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 30),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
       trailing: const Icon(
         Icons.chevron_right_rounded,
@@ -394,9 +481,9 @@ class _LanguageTile extends StatelessWidget {
     return ListTile(
       minLeadingWidth: 32,
       contentPadding: const EdgeInsetsDirectional.only(start: 18, end: 16),
-      leading: const Icon(
+      leading: Icon(
         Icons.language_rounded,
-        color: Color(0xFF1D55D8),
+        color: Theme.of(context).colorScheme.primary,
         size: 30,
       ),
       title: Text(
@@ -407,6 +494,7 @@ class _LanguageTile extends StatelessWidget {
         child: DropdownButton<String>(
           value: locale.languageCode,
           borderRadius: BorderRadius.circular(14),
+          dropdownColor: Theme.of(context).cardColor,
           items: [
             DropdownMenuItem(
               value: 'ar',
@@ -443,9 +531,9 @@ class _ThemeTile extends StatelessWidget {
     return ListTile(
       minLeadingWidth: 32,
       contentPadding: const EdgeInsetsDirectional.only(start: 18, end: 16),
-      leading: const Icon(
+      leading: Icon(
         Icons.brightness_6_outlined,
-        color: Color(0xFF1D55D8),
+        color: Theme.of(context).colorScheme.primary,
         size: 30,
       ),
       title: Text(
@@ -456,6 +544,7 @@ class _ThemeTile extends StatelessWidget {
         child: DropdownButton<ThemeMode>(
           value: value,
           borderRadius: BorderRadius.circular(14),
+          dropdownColor: Theme.of(context).cardColor,
           items: [
             DropdownMenuItem(
               value: ThemeMode.system,
@@ -480,43 +569,21 @@ class _ThemeTile extends StatelessWidget {
   }
 }
 
-class _AccountButton extends StatelessWidget {
-  const _AccountButton({
-    required this.label,
-    required this.signedIn,
-    required this.onPressed,
-  });
 
-  final String label;
-  final bool signedIn;
-  final VoidCallback onPressed;
 
-  @override
-  Widget build(BuildContext context) {
-    final color = signedIn ? const Color(0xFFE94335) : const Color(0xFF1D55D8);
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(signedIn ? Icons.logout_rounded : Icons.login_rounded),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(58),
-        foregroundColor: color,
-        side: const BorderSide(color: Color(0xFFE4EAF3)),
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-      ),
-    );
-  }
-}
-
-BoxDecoration _cardDecoration() {
+BoxDecoration _cardDecoration(BuildContext context) {
   return BoxDecoration(
-    color: Colors.white,
+    color: Theme.of(context).cardColor,
     borderRadius: BorderRadius.circular(18),
-    border: Border.all(color: const Color(0xFFE4EAF3)),
-    boxShadow: const [
-      BoxShadow(color: Color(0x0D0A2758), blurRadius: 18, offset: Offset(0, 8)),
+    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+    boxShadow: [
+      BoxShadow(
+        color: Theme.of(context).brightness == Brightness.light
+            ? const Color(0x0D0A2758)
+            : Colors.black.withValues(alpha: 0.2),
+        blurRadius: 18,
+        offset: const Offset(0, 8),
+      ),
     ],
   );
 }

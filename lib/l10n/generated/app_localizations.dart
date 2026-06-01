@@ -1159,6 +1159,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Coordinate the return in-app while keeping personal information private.'**
   String get onboardingPage3Subtitle;
+
+  /// No description provided for @noNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'No notifications yet'**
+  String get noNotifications;
+
+  /// No description provided for @notificationsEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll be notified when matches or updates are found.'**
+  String get notificationsEmptyHint;
+
+  /// No description provided for @clearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear All'**
+  String get clearAll;
+
+  /// No description provided for @markAllRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all as read'**
+  String get markAllRead;
+
+  /// No description provided for @clearAllConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all notifications?'**
+  String get clearAllConfirm;
+
+  /// No description provided for @clearAllConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This action cannot be undone.'**
+  String get clearAllConfirmMessage;
+
+  /// No description provided for @notificationDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification deleted'**
+  String get notificationDeleted;
+
+  /// No description provided for @allNotificationsCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'All notifications cleared'**
+  String get allNotificationsCleared;
+
+  /// No description provided for @allNotificationsMarkedRead.
+  ///
+  /// In en, this message translates to:
+  /// **'All notifications marked as read'**
+  String get allNotificationsMarkedRead;
 }
 
 class _AppLocalizationsDelegate

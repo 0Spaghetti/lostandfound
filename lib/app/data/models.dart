@@ -172,6 +172,8 @@ class ItemPostRepository extends ChangeNotifier {
   SharedPreferences? _prefs;
   bool _loaded = false;
 
+  void Function(ItemPost post)? onPostAdded;
+
   bool get isLoaded => _loaded;
 
   List<ItemPost> get posts => List.unmodifiable(_posts);
@@ -202,6 +204,7 @@ class ItemPostRepository extends ChangeNotifier {
     _posts.insert(0, post);
     await _save();
     notifyListeners();
+    onPostAdded?.call(post);
   }
 
   Future<void> toggleFavorite(String id) async {
