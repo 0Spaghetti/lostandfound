@@ -2,37 +2,28 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/providers.dart';
 import '../../shared/l10n/app_strings.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({
     super.key,
     required this.strings,
-    required this.locale,
-    required this.themeMode,
-    required this.onLocaleChanged,
-    required this.onThemeModeChanged,
-    this.onToggleLanguage,
     this.onNotificationsTap,
     this.hasUnreadNotifications = false,
   });
 
   final AppStrings strings;
-  final Locale locale;
-  final ThemeMode themeMode;
-  final ValueChanged<Locale> onLocaleChanged;
-  final ValueChanged<ThemeMode> onThemeModeChanged;
-  final VoidCallback? onToggleLanguage;
   final VoidCallback? onNotificationsTap;
   final bool hasUnreadNotifications;
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   static const _notificationsKey = 'settings_notifications_enabled';
   static const _locationKey = 'settings_location_enabled';
   static const _settingsChannel = MethodChannel('lostandfound/settings');
@@ -40,15 +31,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _locationEnabled = false;
 
+  bool get _arabic => ref.watch(localeProvider).languageCode == 'ar';
+
   @override
   void initState() {
     super.initState();
-    unawaited(_loadSettings());
+    _loadSettings();
   }
 
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
+  void _loadSettings() {
+    final prefs = ref.read(sharedPreferencesProvider);
     setState(() {
       _notificationsEnabled = prefs.getBool(_notificationsKey) ?? true;
       _locationEnabled = prefs.getBool(_locationKey) ?? false;
@@ -57,13 +49,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _setNotifications(bool value) async {
     setState(() => _notificationsEnabled = value);
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setBool(_notificationsKey, value);
   }
 
   Future<void> _setLocation(bool value) async {
     setState(() => _locationEnabled = value);
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setBool(_locationKey, value);
     if (value) {
       await _openSystemSettings();
@@ -88,7 +80,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showFaqDialog() {
-    final isArabic = widget.locale.languageCode == 'ar';
+    final isArabic = _arabic;
     showDialog<void>(
       context: context,
       builder: (context) {
@@ -167,7 +159,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showReportProblemDialog() {
-    final isArabic = widget.locale.languageCode == 'ar';
+    final isArabic = _arabic;
     final problemController = TextEditingController();
 
     showDialog<void>(
@@ -225,7 +217,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showTermsDialog() {
-    final isArabic = widget.locale.languageCode == 'ar';
+    final isArabic = _arabic;
     showDialog<void>(
       context: context,
       builder: (context) {
@@ -275,7 +267,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = widget.strings;
-    final isArabic = widget.locale.languageCode == 'ar';
+    final locale = ref.watch(localeProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final isArabic = locale.languageCode == 'ar';
     return Directionality(
       textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
@@ -316,13 +310,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _LanguageTile(
                   strings: strings,
-                  locale: widget.locale,
-                  onChanged: widget.onLocaleChanged,
+                  locale: locale,
+                  onChanged: (newLocale) => ref.read(localeProvider.notifier).setLocale(newLocale),
                 ),
                 _ThemeTile(
                   strings: strings,
-                  value: widget.themeMode,
-                  onChanged: widget.onThemeModeChanged,
+                  value: themeMode,
+                  onChanged: (newTheme) => ref.read(themeModeProvider.notifier).setThemeMode(newTheme),
                 ),
               ],
             ),

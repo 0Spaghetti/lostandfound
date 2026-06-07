@@ -148,6 +148,10 @@ class AppStrings {
     return AppStrings._(AppLocalizations.of(context));
   }
 
+  static AppStrings fromLocals(AppLocalizations l10n) {
+    return AppStrings._(l10n);
+  }
+
   String get localeName => _l10n.localeName;
 
   String get appName => _l10n.appName;
@@ -337,6 +341,19 @@ class AppStrings {
   String get notificationDeleted => _l10n.notificationDeleted;
   String get allNotificationsCleared => _l10n.allNotificationsCleared;
   String get allNotificationsMarkedRead => _l10n.allNotificationsMarkedRead;
+
+  // Authentication strings
+  String get login => localeName == 'ar' ? 'تسجيل الدخول' : 'Log in';
+  String get signUp => localeName == 'ar' ? 'إنشاء حساب' : 'Sign up';
+  String get email => localeName == 'ar' ? 'البريد الإلكتروني' : 'Email';
+  String get password => localeName == 'ar' ? 'كلمة المرور' : 'Password';
+  String get confirmPassword => localeName == 'ar' ? 'تأكيد كلمة المرور' : 'Confirm Password';
+  String get fullName => localeName == 'ar' ? 'الاسم الكامل' : 'Full Name';
+  String get dontHaveAccount => localeName == 'ar' ? 'ليس لديك حساب؟' : 'Don\'t have an account?';
+  String get alreadyHaveAccount => localeName == 'ar' ? 'لديك حساب بالفعل؟' : 'Already have an account?';
+  String get forgotPassword => localeName == 'ar' ? 'هل نسيت كلمة المرور؟' : 'Forgot Password?';
+  String get loginRequiredTitle => localeName == 'ar' ? 'تسجيل الدخول مطلوب' : 'Login Required';
+  String get pleaseLoginToContinue => localeName == 'ar' ? 'يرجى تسجيل الدخول للوصول إلى هذه الميزة.' : 'Please log in to access this feature.';
 }
 
 String notificationTitle(NotificationModel notification, AppStrings strings) {

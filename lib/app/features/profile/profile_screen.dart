@@ -2,48 +2,35 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
 
-import '../../data/chat_thread_repository.dart';
 import '../../data/models.dart';
 import '../../shared/l10n/app_strings.dart';
+import '../../shared/widgets/common_widgets.dart';
 import '../chat/chat_screen.dart';
 import '../settings/settings_screen.dart';
 
-class ProfileScreen extends StatefulWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/providers.dart';
+
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({
     super.key,
     required this.strings,
-    this.locale,
-    this.themeMode,
-    this.onLocaleChanged,
-    this.onThemeModeChanged,
-    this.onToggleLanguage,
-    required this.repository,
-    required this.chatRepository,
     this.userId, // Null or 'current-user' means Personal Mode; other means Public Mode!
     this.openEditOnStart = false,
   });
 
   final AppStrings strings;
-  final Locale? locale;
-  final ThemeMode? themeMode;
-  final ValueChanged<Locale>? onLocaleChanged;
-  final ValueChanged<ThemeMode>? onThemeModeChanged;
-  final VoidCallback? onToggleLanguage;
-  final ItemPostRepository repository;
-  final ChatThreadRepository chatRepository;
   final String? userId;
   final bool openEditOnStart;
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _signedIn = true;
-  String _profileName = '';
-  String _profileEmail = '';
   bool _loading = true;
 
   bool get _isPersonal =>
@@ -52,12 +39,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String get _targetUserId =>
       _isPersonal ? 'current-user' : widget.userId!;
 
-  bool get _arabic => (widget.locale?.languageCode ?? Localizations.localeOf(context).languageCode) == 'ar';
+  bool get _arabic => ref.watch(localeProvider).languageCode == 'ar';
 
   @override
   void initState() {
     super.initState();
-    widget.repository.addListener(_onRepositoryChanged);
     unawaited(_loadProfileData());
     if (widget.openEditOnStart && _isPersonal) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -66,36 +52,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    widget.repository.removeListener(_onRepositoryChanged);
-    super.dispose();
-  }
-
-  void _onRepositoryChanged() {
-    if (mounted) setState(() {});
-  }
-
   Future<void> _loadProfileData() async {
     if (!_isPersonal) {
       setState(() => _loading = false);
       return;
     }
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = ref.read(sharedPreferencesProvider);
     if (!mounted) return;
     setState(() {
       _signedIn = prefs.getBool('settings_signed_in') ?? true;
-      _profileName = prefs.getString('settings_profile_name') ??
-          widget.strings.demoUserName;
-      _profileEmail = prefs.getString('settings_profile_email') ??
-          widget.strings.demoUserEmail;
       _loading = false;
     });
   }
 
   Future<void> _setSignedIn(bool value) async {
     setState(() => _signedIn = value);
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setBool('settings_signed_in', value);
     _showSnack(
       value ? widget.strings.signIn : widget.strings.signedOut,
@@ -121,8 +93,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       return;
     }
-    final nameController = TextEditingController(text: _profileName);
-    final emailController = TextEditingController(text: _profileEmail);
+    final nameController = TextEditingController(text: ref.read(profileNameProvider));
+    final emailController = TextEditingController(text: ref.read(profileEmailProvider));
 
     showDialog<void>(
       context: context,
@@ -174,14 +146,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     return;
                   }
                   Navigator.pop(context);
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setString('settings_profile_name', name);
-                  await prefs.setString('settings_profile_email', email);
+                  await ref.read(profileNameProvider.notifier).setName(name);
+                  await ref.read(profileEmailProvider.notifier).setEmail(email);
                   await HapticFeedback.mediumImpact();
-                  setState(() {
-                    _profileName = name;
-                    _profileEmail = email;
-                  });
                   _showSnack(
                     _arabic
                         ? 'تم تحديث الملف الشخصي'
@@ -198,37 +165,208 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _changePhoto() async {
+    if (!_signedIn) {
+      _showSnack(
+        _arabic
+            ? 'سجل الدخول لتغيير الصورة'
+            : 'Please sign in to change your photo.',
+      );
+      return;
+    }
     await HapticFeedback.lightImpact();
-    _showSnack(
-      _arabic ? 'تغيير الصورة الشخصية قريباً!' : 'Change Photo coming soon!',
+    if (!mounted) return;
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Directionality(
+          textDirection: _arabic ? TextDirection.rtl : TextDirection.ltr,
+          child: RoundedSheet(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SheetHandle(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                  child: Text(
+                    _arabic ? 'صورة الملف الشخصي' : 'Profile Picture',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: Icon(Icons.photo_camera_outlined, color: Theme.of(context).colorScheme.primary),
+                  title: Text(_arabic ? 'الكاميرا' : widget.strings.camera, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  onTap: () => Navigator.pop(context, 'camera'),
+                ),
+                ListTile(
+                  leading: Icon(Icons.photo_library_outlined, color: Theme.of(context).colorScheme.primary),
+                  title: Text(_arabic ? 'المعرض' : widget.strings.gallery, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  onTap: () => Navigator.pop(context, 'gallery'),
+                ),
+                const Divider(height: 24, indent: 18, endIndent: 18),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+                  child: Text(
+                    _arabic ? 'اختر شخصية رقمية مميزة:' : 'Choose a premium preset avatar:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 90,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    itemCount: avatarPresets.length,
+                    separatorBuilder: (context, index) => const SizedBox(width: 14),
+                    itemBuilder: (context, index) {
+                      final preset = avatarPresets[index];
+                      final currentAvatar = ref.watch(profileAvatarProvider);
+                      final isSelected = currentAvatar == preset.id;
+
+                      return InkWell(
+                        onTap: () {
+                          Navigator.pop(context, preset.id);
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: 80,
+                          decoration: BoxDecoration(
+                            gradient: preset.gradient,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              width: 3.0,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: preset.gradient.colors.last.withValues(alpha: isSelected ? 0.4 : 0.15),
+                                blurRadius: isSelected ? 12 : 6,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Stack(
+                            children: [
+                              Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(preset.emoji, style: const TextStyle(fontSize: 24)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _arabic
+                                          ? (preset.id == 'avatar_student'
+                                              ? 'طالب'
+                                              : preset.id == 'avatar_tech'
+                                                  ? 'تقني'
+                                                  : preset.id == 'avatar_security'
+                                                      ? 'أمن'
+                                                      : 'دليل')
+                                          : (preset.id == 'avatar_student'
+                                              ? 'Student'
+                                              : preset.id == 'avatar_tech'
+                                                  ? 'Tech'
+                                                  : preset.id == 'avatar_security'
+                                                      ? 'Security'
+                                                      : 'Guide'),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (isSelected)
+                                const Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: Icon(
+                                    Icons.check_circle_rounded,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
     );
+
+    if (choice == null) return;
+
+    if (choice.startsWith('avatar_')) {
+      await ref.read(profileAvatarProvider.notifier).setAvatar(choice);
+      _showSnack(
+        _arabic
+            ? 'تم تحديث الصورة الشخصية!'
+            : 'Avatar updated successfully!',
+      );
+      return;
+    }
+
+    // Capture photo from camera or gallery
+    final picker = ImagePicker();
+    try {
+      final image = await picker.pickImage(
+        source: choice == 'camera' ? ImageSource.camera : ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 600,
+      );
+      if (image == null) return;
+      
+      final bytes = await image.readAsBytes();
+      final dataUri = dataUriFromBytes(bytes);
+      await ref.read(profileAvatarProvider.notifier).setAvatar(dataUri);
+      _showSnack(
+        _arabic
+            ? 'تم تحديث الصورة الشخصية!'
+            : 'Avatar updated successfully!',
+      );
+    } catch (_) {
+      _showSnack(
+        _arabic ? 'عذراً، تعذر تحميل الصورة' : 'Could not attach image',
+      );
+    }
   }
 
   void _openSettings() {
-    if (widget.locale == null ||
-        widget.themeMode == null ||
-        widget.onLocaleChanged == null ||
-        widget.onThemeModeChanged == null ||
-        widget.onToggleLanguage == null) {
-      return;
-    }
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => SettingsScreen(
           strings: widget.strings,
-          locale: widget.locale!,
-          themeMode: widget.themeMode!,
-          onLocaleChanged: widget.onLocaleChanged!,
-          onThemeModeChanged: widget.onThemeModeChanged!,
-          onToggleLanguage: widget.onToggleLanguage!,
         ),
       ),
     );
   }
 
   Future<void> _contactUser() async {
-    final posts = widget.repository.posts
+    final posts = ref.read(itemPostRepositoryProvider).posts
         .where((p) => p.createdBy.userId == _targetUserId)
         .toList();
     if (posts.isEmpty) {
@@ -240,7 +378,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
     final post = posts.first;
-    final thread = await widget.chatRepository.openThreadForPost(
+    final thread = await ref.read(chatThreadRepositoryProvider).openThreadForPost(
       post,
       itemPostTitle(post, widget.strings),
     );
@@ -248,8 +386,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatScreen(
-          repository: widget.chatRepository,
-          itemRepository: widget.repository,
           threadId: thread.id,
           itemId: post.id,
           otherUserId: thread.participantId,
@@ -270,7 +406,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    final allPosts = widget.repository.posts;
+    final allPosts = ref.watch(itemPostRepositoryProvider).posts;
     final userPosts =
         allPosts.where((p) => p.createdBy.userId == _targetUserId).toList();
 
@@ -289,12 +425,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final hasRecoveredFive = recoveredCount >= 1; // Unlocks dynamic reunion master
     final hasActiveMember = totalCount >= 3;
 
+    final refName = ref.watch(profileNameProvider);
+    final refEmail = ref.watch(profileEmailProvider);
+
     final name = _isPersonal
-        ? (_signedIn ? _profileName : widget.strings.continueAsGuest)
+        ? (_signedIn ? (refName.isEmpty ? widget.strings.demoUserName : refName) : widget.strings.continueAsGuest)
         : _targetUserId.replaceAll(RegExp(r'[_-]+'), ' ').trim();
 
     final email = _isPersonal
-        ? (_signedIn ? _profileEmail : widget.strings.signIn)
+        ? (_signedIn ? (refEmail.isEmpty ? widget.strings.demoUserEmail : refEmail) : widget.strings.signIn)
         : '${_targetUserId.replaceAll(RegExp(r'[_-]+'), '')}@uni.edu';
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -354,30 +493,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   Stack(
                     children: [
-                      CircleAvatar(
-                        radius: 38,
-                        backgroundColor:
-                            Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                        child: Text(
-                          name.isEmpty
-                              ? '?'
-                              : name
-                                    .split(' ')
-                                    .where((part) => part.isNotEmpty)
-                                    .take(2)
-                                    .map((part) => part[0].toUpperCase())
-                                    .join(),
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
+                      UserAvatar(
+                        userId: _targetUserId,
+                        size: 76,
                       ),
                       if (_isPersonal && _signedIn)
-                        Positioned(
+                        PositionedDirectional(
                           bottom: 0,
-                          right: 0,
+                          end: 0,
                           child: InkWell(
                             onTap: _changePhoto,
                             borderRadius: BorderRadius.circular(99),

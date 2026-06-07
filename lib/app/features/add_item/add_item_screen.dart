@@ -92,16 +92,20 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   ItemCategory? _detectCategoryFromText(String text) {
-    if (RegExp(r'\b(phone|iphone|samsung|pixel|headphones|earbuds|buds|airpods|charger|cable|wire|laptop|computer|macbook|ipad|tablet|screen|watch|smartwatch|powerbank|battery)\b').hasMatch(text)) {
+    if (RegExp(r'\b(phone|iphone|samsung|pixel|headphones|earbuds|buds|airpods|charger|cable|wire|laptop|computer|macbook|ipad|tablet|screen|watch|smartwatch|powerbank|battery)\b').hasMatch(text) ||
+        RegExp(r'(جوال|هاتف|سماعة|سماعات|شاحن|سلك|كيبل|لابتوب|كمبيوتر|حاسوب|أيباد|تابلت|شاشة|ساعة|باوربانك|بطارية)').hasMatch(text)) {
       return ItemCategory.electronics;
     }
-    if (RegExp(r'\b(key|keys|ring|keychain|fob|car key|dorm key)\b').hasMatch(text)) {
+    if (RegExp(r'\b(key|keys|ring|keychain|fob|car key|dorm key)\b').hasMatch(text) ||
+        RegExp(r'(مفتاح|مفاتيح|حلقة|ميدالية|علاقة)').hasMatch(text)) {
       return ItemCategory.keys;
     }
-    if (RegExp(r'\b(bag|backpack|wallet|purse|backpack|backpacks|pouch|case|sleeve|bag|pocketbook)\b').hasMatch(text)) {
+    if (RegExp(r'\b(bag|backpack|wallet|purse|backpack|backpacks|pouch|case|sleeve|bag|pocketbook)\b').hasMatch(text) ||
+        RegExp(r'(حقيبة|شنطة|شنط|محفظة|بوك|كيس|حافظة|جراب)').hasMatch(text)) {
       return ItemCategory.bag;
     }
-    if (RegExp(r'\b(id|card|cards|license|visa|mastercard|student id|permit|pass|badge|student card)\b').hasMatch(text)) {
+    if (RegExp(r'\b(id|card|cards|license|visa|mastercard|student id|permit|pass|badge|student card)\b').hasMatch(text) ||
+        RegExp(r'(بطاقة|هوية|رخصة|فيزا|ماستركارد|تصريح|بطاقه|كارنيه|باج)').hasMatch(text)) {
       return ItemCategory.cards;
     }
     return null;
@@ -469,88 +473,100 @@ class _AddItemScreenState extends State<AddItemScreen> {
               borderRadius: BorderRadius.circular(24),
             ),
             backgroundColor: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primary
-                      .withValues(alpha: 0.2),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(alpha: 0.15),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Stack(
                 children: [
                   Container(
-                    width: 90,
-                    height: 90,
+                    padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      shape: BoxShape.circle,
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.2),
+                        width: 2,
+                      ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFFBBF24).withValues(alpha: 0.3),
-                          blurRadius: 16,
-                          spreadRadius: 2,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.15),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
                         ),
                       ],
                     ),
-                    child: const Center(
-                      child: Text(
-                        '🏆',
-                        style: TextStyle(fontSize: 48),
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFBBF24).withValues(alpha: 0.3),
+                                blurRadius: 16,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Text(
+                              '🏆',
+                              style: TextStyle(fontSize: 48),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF0A2758),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          subtitle,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            height: 1.4,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(50),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
+                          ),
+                          child: Text(isArabic ? 'رائع!' : 'Awesome!'),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0A2758),
+                  const Positioned.fill(
+                    child: IgnorePointer(
+                      child: ConfettiOverlay(),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    subtitle,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      height: 1.4,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(50),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      textStyle: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                      ),
-                    ),
-                    child: Text(isArabic ? 'رائع!' : 'Awesome!'),
                   ),
                 ],
               ),

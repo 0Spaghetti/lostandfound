@@ -1,20 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/chat_thread_repository.dart';
 import '../../data/models.dart';
+import '../../data/providers.dart';
 import '../../shared/l10n/app_strings.dart';
 import '../../shared/widgets/common_widgets.dart';
 import '../details/item_details_screen.dart';
 import 'chat_screen.dart';
 
-class ChatInboxScreen extends StatelessWidget {
+class ChatInboxScreen extends ConsumerWidget {
   const ChatInboxScreen({
     super.key,
     required this.strings,
-    required this.chatRepository,
-    required this.itemRepository,
     required this.onLanguageToggle,
     required this.languageLabel,
     this.onNotificationsTap,
@@ -22,15 +22,14 @@ class ChatInboxScreen extends StatelessWidget {
   });
 
   final AppStrings strings;
-  final ChatThreadRepository chatRepository;
-  final ItemPostRepository itemRepository;
   final VoidCallback onLanguageToggle;
   final String languageLabel;
   final VoidCallback? onNotificationsTap;
   final bool hasUnreadNotifications;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final chatRepository = ref.watch(chatThreadRepositoryProvider);
     final threads = chatRepository.threads;
     return SafeArea(
       child: CustomScrollView(
@@ -76,7 +75,7 @@ class ChatInboxScreen extends StatelessWidget {
                     thread: thread,
                     strings: strings,
                     typing: chatRepository.isTyping(thread.id),
-                    onTap: () => _openThread(context, thread),
+                    onTap: () => _openThread(context, ref, thread),
                   );
                 },
               ),
@@ -86,16 +85,15 @@ class ChatInboxScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _openThread(BuildContext context, ChatThread thread) async {
+  Future<void> _openThread(BuildContext context, WidgetRef ref, ChatThread thread) async {
+    final chatRepository = ref.read(chatThreadRepositoryProvider);
     await chatRepository.markRead(thread.id);
     if (!context.mounted) return;
 
-    final post = _findPost(thread.itemId);
+    final post = _findPost(ref, thread.itemId);
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatScreen(
-          repository: chatRepository,
-          itemRepository: itemRepository,
           threadId: thread.id,
           itemId: thread.itemId,
           otherUserId: thread.participantId,
@@ -112,8 +110,6 @@ class ChatInboxScreen extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (_) => ItemDetailsScreen(
                         postId: post.id,
-                        repository: itemRepository,
-                        chatRepository: chatRepository,
                         strings: strings,
                         initialPost: post,
                       ),
@@ -125,7 +121,8 @@ class ChatInboxScreen extends StatelessWidget {
     );
   }
 
-  ItemPost? _findPost(String itemId) {
+  ItemPost? _findPost(WidgetRef ref, String itemId) {
+    final itemRepository = ref.read(itemPostRepositoryProvider);
     final index = itemRepository.posts.indexWhere((post) => post.id == itemId);
     if (index < 0) return null;
     return itemRepository.posts[index];
@@ -190,20 +187,9 @@ class _ChatThreadCard extends StatelessWidget {
                   PositionedDirectional(
                     end: -5,
                     bottom: -5,
-                    child: CircleAvatar(
-                      radius: 15,
-                      backgroundColor: const Color(0xFFDBEAFE),
-                      child: Text(
-                        chatInitials(
-                          thread.participantId,
-                          strings.campusMember,
-                        ),
-                        style: const TextStyle(
-                          color: Color(0xFF1D4ED8),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
+                    child: UserAvatar(
+                      userId: thread.participantId,
+                      size: 30,
                     ),
                   ),
                 ],

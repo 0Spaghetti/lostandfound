@@ -1,49 +1,24 @@
 import 'package:flutter/material.dart';
-import '../../data/chat_thread_repository.dart';
-import '../../data/models.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/notification_repository.dart';
+import '../../data/providers.dart';
 import '../../shared/l10n/app_strings.dart';
 import '../chat/chat_screen.dart';
 import '../details/item_details_screen.dart';
 import '../profile/profile_screen.dart';
 
-class NotificationScreen extends StatefulWidget {
+class NotificationScreen extends ConsumerStatefulWidget {
   const NotificationScreen({
     super.key,
-    required this.repository,
-    required this.itemRepository,
-    required this.chatRepository,
   });
 
-  final NotificationRepository repository;
-  final ItemPostRepository itemRepository;
-  final ChatThreadRepository chatRepository;
-
   @override
-  State<NotificationScreen> createState() => _NotificationScreenState();
+  ConsumerState<NotificationScreen> createState() => _NotificationScreenState();
 }
 
-class _NotificationScreenState extends State<NotificationScreen> {
+class _NotificationScreenState extends ConsumerState<NotificationScreen> {
   bool get _arabic => Localizations.localeOf(context).languageCode == 'ar';
   AppStrings get strings => AppStrings.of(context);
-
-  @override
-  void initState() {
-    super.initState();
-    widget.repository.addListener(_onRepositoryChanged);
-  }
-
-  @override
-  void dispose() {
-    widget.repository.removeListener(_onRepositoryChanged);
-    super.dispose();
-  }
-
-  void _onRepositoryChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
 
   // Group notifications into Today, Yesterday, and Earlier
   Map<String, List<NotificationModel>> _groupNotifications(List<NotificationModel> list) {
@@ -74,7 +49,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   Future<void> _handleTap(NotificationModel notification) async {
     // Mark as read
-    await widget.repository.markAsRead(notification.id);
+    await ref.read(notificationRepositoryProvider).markAsRead(notification.id);
 
     if (notification.type == NotificationType.system) {
       if (mounted) {
@@ -83,8 +58,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
           MaterialPageRoute(
             builder: (context) => ProfileScreen(
               strings: strings,
-              repository: widget.itemRepository,
-              chatRepository: widget.chatRepository,
               openEditOnStart: true,
             ),
           ),
@@ -96,22 +69,20 @@ class _NotificationScreenState extends State<NotificationScreen> {
     if (notification.associatedItemId == null) return;
 
     if (notification.type == NotificationType.chat) {
-      final threads = widget.chatRepository.threads;
+      final threads = ref.read(chatThreadRepositoryProvider).threads;
       final threadIdx = threads.indexWhere((t) => t.id == notification.associatedItemId);
       if (threadIdx >= 0) {
         final thread = threads[threadIdx];
-        final postIdx = widget.itemRepository.posts.indexWhere((p) => p.id == thread.itemId);
-        final post = postIdx >= 0 ? widget.itemRepository.posts[postIdx] : null;
+        final postIdx = ref.read(itemPostRepositoryProvider).posts.indexWhere((p) => p.id == thread.itemId);
+        final post = postIdx >= 0 ? ref.read(itemPostRepositoryProvider).posts[postIdx] : null;
 
         if (mounted) {
-          await widget.chatRepository.markRead(thread.id);
+          await ref.read(chatThreadRepositoryProvider).markRead(thread.id);
           if (!mounted) return;
           await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => ChatScreen(
-                repository: widget.chatRepository,
-                itemRepository: widget.itemRepository,
                 threadId: thread.id,
                 itemId: thread.itemId,
                 otherUserId: thread.participantId,
@@ -128,8 +99,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           MaterialPageRoute(
                             builder: (_) => ItemDetailsScreen(
                               postId: post.id,
-                              repository: widget.itemRepository,
-                              chatRepository: widget.chatRepository,
                               strings: strings,
                               initialPost: post,
                             ),
@@ -152,17 +121,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
         }
       }
     } else {
-      final index = widget.itemRepository.posts.indexWhere((p) => p.id == notification.associatedItemId);
+      final index = ref.read(itemPostRepositoryProvider).posts.indexWhere((p) => p.id == notification.associatedItemId);
       if (index >= 0) {
-        final post = widget.itemRepository.posts[index];
+        final post = ref.read(itemPostRepositoryProvider).posts[index];
         if (mounted) {
           await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => ItemDetailsScreen(
                 postId: post.id,
-                repository: widget.itemRepository,
-                chatRepository: widget.chatRepository,
                 strings: strings,
                 initialPost: post,
               ),
@@ -200,7 +167,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
               FilledButton(
                 onPressed: () async {
                   Navigator.pop(context);
-                  await widget.repository.clearAll();
+                  await ref.read(notificationRepositoryProvider).clearAll();
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -226,7 +193,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final allNotifs = widget.repository.notifications;
+    final repository = ref.watch(notificationRepositoryProvider);
+    final allNotifs = repository.notifications;
     final grouped = _groupNotifications(allNotifs);
 
     return Directionality(
@@ -252,7 +220,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   PopupMenuButton<String>(
                     onSelected: (value) async {
                       if (value == 'read') {
-                        await widget.repository.markAllAsRead();
+                        await ref.read(notificationRepositoryProvider).markAllAsRead();
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -448,7 +416,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         key: Key(notification.id),
         direction: DismissDirection.endToStart,
         onDismissed: (direction) async {
-          await widget.repository.deleteNotification(notification.id);
+          await ref.read(notificationRepositoryProvider).deleteNotification(notification.id);
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -580,9 +548,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     width: 4,
                     decoration: BoxDecoration(
                       color: accentColor,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        bottomLeft: Radius.circular(16),
+                      borderRadius: const BorderRadiusDirectional.only(
+                        topStart: Radius.circular(16),
+                        bottomStart: Radius.circular(16),
                       ),
                     ),
                   ),

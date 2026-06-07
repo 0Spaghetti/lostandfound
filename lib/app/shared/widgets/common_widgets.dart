@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shimmer/shimmer.dart';
 
 import '../../data/models.dart';
+import '../../data/providers.dart';
 import '../l10n/app_strings.dart';
 
 const collegeLogoAssetPath = 'assets/images/college_logo.png';
@@ -659,13 +663,19 @@ class ItemPostCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: Text(
-                            itemPostTitle(post, strings),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: Theme.of(context).colorScheme.onSurface,
+                          child: Hero(
+                            tag: 'title-${post.id}',
+                            child: Material(
+                              type: MaterialType.transparency,
+                              child: Text(
+                                itemPostTitle(post, strings),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -693,6 +703,7 @@ class ItemPostCard extends StatelessWidget {
               ),
               IconButton(
                 onPressed: () {
+                  HapticFeedback.lightImpact();
                   unawaited(onFavorite());
                 },
                 tooltip: strings.favorites,
@@ -809,6 +820,58 @@ class PhotoPreview extends StatelessWidget {
       size: size,
       iconSize: iconSize,
       borderRadius: borderRadius,
+    );
+  }
+}
+
+class PostSkeleton extends StatelessWidget {
+  const PostSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Shimmer.fromColors(
+        baseColor: baseColor,
+        highlightColor: highlightColor,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(width: double.infinity, height: 20, color: Colors.white),
+                  const SizedBox(height: 8),
+                  Container(width: 120, height: 16, color: Colors.white),
+                  const SizedBox(height: 12),
+                  Container(width: 80, height: 12, color: Colors.white),
+                  const SizedBox(height: 5),
+                  Container(width: 140, height: 12, color: Colors.white),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1216,4 +1279,376 @@ class _FadeInSlideState extends State<FadeInSlide> with SingleTickerProviderStat
       ),
     );
   }
+}
+
+// User Illustrated Avatar Presets
+class AvatarPreset {
+  const AvatarPreset({
+    required this.id,
+    required this.icon,
+    required this.gradient,
+    required this.emoji,
+  });
+
+  final String id;
+  final IconData icon;
+  final LinearGradient gradient;
+  final String emoji;
+}
+
+final List<AvatarPreset> avatarPresets = [
+  const AvatarPreset(
+    id: 'avatar_student',
+    icon: Icons.school_rounded,
+    gradient: LinearGradient(
+      colors: [Color(0xFFE8F1FF), Color(0xFF3578F6)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    emoji: '🎓',
+  ),
+  const AvatarPreset(
+    id: 'avatar_tech',
+    icon: Icons.terminal_rounded,
+    gradient: LinearGradient(
+      colors: [Color(0xFFE2F8FA), Color(0xFF087889)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    emoji: '💻',
+  ),
+  const AvatarPreset(
+    id: 'avatar_security',
+    icon: Icons.shield_rounded,
+    gradient: LinearGradient(
+      colors: [Color(0xFFFFF1F2), Color(0xFFE11D48)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    emoji: '🛡️',
+  ),
+  const AvatarPreset(
+    id: 'avatar_guide',
+    icon: Icons.explore_rounded,
+    gradient: LinearGradient(
+      colors: [Color(0xFFFFC97C), Color(0xFF9A5B10)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    emoji: '🧭',
+  ),
+];
+
+AvatarPreset? _presetForUserId(String userId) {
+  final normalized = userId.toLowerCase();
+  if (normalized.contains('staff') || normalized.contains('security')) {
+    return avatarPresets[2]; // Security
+  }
+  if (normalized.contains('student-18') || normalized.contains('student-22') || normalized.contains('tech')) {
+    return avatarPresets[1]; // Tech Scholar
+  }
+  if (normalized.contains('student')) {
+    return avatarPresets[0]; // Student Explorer
+  }
+  if (normalized.contains('admin') || normalized.contains('housing') || normalized.contains('front')) {
+    return avatarPresets[3]; // Campus Guide
+  }
+  return null;
+}
+
+class UserAvatar extends ConsumerWidget {
+  const UserAvatar({
+    super.key,
+    required this.userId,
+    this.size = 44,
+  });
+
+  final String userId;
+  final double size;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    String? avatarSource;
+    String name = '';
+
+    if (userId == 'current-user') {
+      avatarSource = ref.watch(profileAvatarProvider);
+      name = ref.watch(profileNameProvider);
+      if (name.isEmpty) {
+        name = AppStrings.of(context).demoUserName;
+      }
+    } else {
+      name = userId.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+      final preset = _presetForUserId(userId);
+      if (preset != null) {
+        avatarSource = preset.id;
+      }
+    }
+
+    // Determine initials
+    final initials = name.isEmpty
+        ? '?'
+        : name
+            .split(' ')
+            .where((part) => part.isNotEmpty)
+            .take(2)
+            .map((part) => part[0].toUpperCase())
+            .join();
+
+    // 1. If it's a preset avatar
+    if (avatarSource != null && avatarSource.startsWith('avatar_')) {
+      final preset = avatarPresets.firstWhere(
+        (p) => p.id == avatarSource,
+        orElse: () => avatarPresets[0],
+      );
+
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: preset.gradient,
+          border: Border.all(
+            color: Colors.white,
+            width: size > 60 ? 3 : 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: preset.gradient.colors.last.withValues(alpha: 0.25),
+              blurRadius: size * 0.16,
+              offset: Offset(0, size * 0.06),
+            ),
+          ],
+        ),
+        child: Icon(
+          preset.icon,
+          color: Colors.white,
+          size: size * 0.46,
+        ),
+      );
+    }
+
+    // 2. If it's a photo (data URI base64)
+    final bytes = avatarSource != null ? decodePhotoBytes(avatarSource) : null;
+    if (bytes != null) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white,
+            width: size > 60 ? 3 : 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: size * 0.16,
+              offset: Offset(0, size * 0.06),
+            ),
+          ],
+        ),
+        child: ClipOval(
+          child: Image.memory(
+            bytes,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
+
+    // 3. Fallback: Initials on premium gradient background
+    final fallbackGradient = LinearGradient(
+      colors: [
+        Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+        Theme.of(context).colorScheme.primary.withValues(alpha: 0.22),
+      ],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: fallbackGradient,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+          width: size > 60 ? 2 : 1.2,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initials,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
+            fontSize: size * 0.36,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Confetti Micro-Animation Overlay Widget
+class ConfettiOverlay extends StatefulWidget {
+  const ConfettiOverlay({super.key, this.duration = const Duration(seconds: 4)});
+
+  final Duration duration;
+
+  @override
+  State<ConfettiOverlay> createState() => _ConfettiOverlayState();
+}
+
+class _ConfettiOverlayState extends State<ConfettiOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  final List<_ConfettiParticle> _particles = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration)
+      ..forward();
+
+    final random = math.Random();
+    for (var i = 0; i < 45; i++) {
+      _particles.add(
+        _ConfettiParticle(
+          color: _confettiColors[random.nextInt(_confettiColors.length)],
+          x: 0.1 + random.nextDouble() * 0.8, // avoid tight edges
+          y: -random.nextDouble() * 0.3,
+          size: 6.0 + random.nextDouble() * 9.0,
+          speedY: 150.0 + random.nextDouble() * 150.0,
+          speedX: -30.0 + random.nextDouble() * 60.0,
+          rotation: random.nextDouble() * math.pi * 2,
+          rotationSpeed: -4.0 + random.nextDouble() * 8.0,
+          driftFreq: 0.6 + random.nextDouble() * 1.4,
+          driftAmp: 12.0 + random.nextDouble() * 18.0,
+          shape: _ConfettiShape.values[random.nextInt(_ConfettiShape.values.length)],
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: _ConfettiPainter(
+            particles: _particles,
+            progress: _controller.value,
+          ),
+          size: Size.infinite,
+        );
+      },
+    );
+  }
+}
+
+enum _ConfettiShape { circle, square, triangle }
+
+class _ConfettiParticle {
+  _ConfettiParticle({
+    required this.color,
+    required this.x,
+    required this.y,
+    required this.size,
+    required this.speedY,
+    required this.speedX,
+    required this.rotation,
+    required this.rotationSpeed,
+    required this.driftFreq,
+    required this.driftAmp,
+    required this.shape,
+  });
+
+  final Color color;
+  double x;
+  double y;
+  final double size;
+  final double speedY;
+  final double speedX;
+  double rotation;
+  final double rotationSpeed;
+  final double driftFreq;
+  final double driftAmp;
+  final _ConfettiShape shape;
+}
+
+final List<Color> _confettiColors = [
+  const Color(0xFF3B82F6), // Blue
+  const Color(0xFF10B981), // Green
+  const Color(0xFFF59E0B), // Gold
+  const Color(0xFFEF4444), // Crimson
+  const Color(0xFFEC4899), // Pink
+  const Color(0xFF8B5CF6), // Purple
+  const Color(0xFF06B6D4), // Cyan
+];
+
+class _ConfettiPainter extends CustomPainter {
+  _ConfettiPainter({required this.particles, required this.progress});
+
+  final List<_ConfettiParticle> particles;
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final p in particles) {
+      final currentY = p.y * size.height + (p.speedY * progress);
+      final drift = math.sin(progress * p.driftFreq * math.pi * 2) * p.driftAmp;
+      final currentX = p.x * size.width + (p.speedX * progress) + drift;
+
+      if (currentY > size.height + p.size || currentY < -50 || currentX < -50 || currentX > size.width + 50) {
+        continue;
+      }
+
+      final paint = Paint()
+        ..color = p.color
+        ..style = PaintingStyle.fill;
+
+      canvas.save();
+      canvas.translate(currentX, currentY);
+      canvas.rotate(p.rotation + p.rotationSpeed * progress);
+
+      final rect = Rect.fromCenter(
+        center: Offset.zero,
+        width: p.size,
+        height: p.size * 0.6,
+      );
+
+      switch (p.shape) {
+        case _ConfettiShape.circle:
+          canvas.drawCircle(Offset.zero, p.size / 2, paint);
+          break;
+        case _ConfettiShape.square:
+          canvas.drawRect(rect, paint);
+          break;
+        case _ConfettiShape.triangle:
+          final path = Path()
+            ..moveTo(0, -p.size / 2)
+            ..lineTo(p.size / 2, p.size / 2)
+            ..lineTo(-p.size / 2, p.size / 2)
+            ..close();
+          canvas.drawPath(path, paint);
+          break;
+      }
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

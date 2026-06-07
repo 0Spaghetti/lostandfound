@@ -3,20 +3,20 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
 import '../../data/chat_thread_repository.dart';
 import '../../data/models.dart';
+import '../../data/providers.dart';
 import '../../shared/l10n/app_strings.dart';
 import '../../shared/widgets/common_widgets.dart';
 import '../profile/profile_screen.dart';
 
-class ChatScreen extends StatefulWidget {
+class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({
     super.key,
-    required this.repository,
-    required this.itemRepository,
     required this.threadId,
     required this.itemId,
     required this.otherUserId,
@@ -27,8 +27,6 @@ class ChatScreen extends StatefulWidget {
     this.onOpenItemDetails,
   });
 
-  final ChatThreadRepository repository;
-  final ItemPostRepository itemRepository;
   final String threadId;
   final String itemId;
   final String otherUserId;
@@ -39,42 +37,33 @@ class ChatScreen extends StatefulWidget {
   final Future<void> Function()? onOpenItemDetails;
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
 
   bool _sendingAttachment = false;
 
-  ChatThread? get _thread => widget.repository.threadById(widget.threadId);
+  ChatThread? get _thread => ref.watch(chatThreadRepositoryProvider).threadById(widget.threadId);
 
   List<ChatMessage> get _messages => _thread?.messages ?? const [];
 
-  bool get _loading => !widget.repository.isLoaded;
+  bool get _loading => !ref.watch(chatThreadRepositoryProvider).isLoaded;
 
   @override
   void initState() {
     super.initState();
-    widget.repository.addListener(_onRepositoryChanged);
-    unawaited(widget.repository.markRead(widget.threadId));
+    unawaited(ref.read(chatThreadRepositoryProvider).markRead(widget.threadId));
   }
 
   @override
   void dispose() {
-    widget.repository.removeListener(_onRepositoryChanged);
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  void _onRepositoryChanged() {
-    if (!mounted) return;
-    setState(() {});
-    unawaited(widget.repository.markRead(widget.threadId));
-    _scrollToBottom();
   }
 
   Future<void> _sendText() async {
@@ -114,7 +103,7 @@ class _ChatScreenState extends State<ChatScreen> {
     String? attachmentPath,
     String? retryForMessageId,
   }) async {
-    await widget.repository.sendMessage(
+    await ref.read(chatThreadRepositoryProvider).sendMessage(
       threadId: widget.threadId,
       text: text,
       attachmentPath: attachmentPath,
@@ -147,7 +136,7 @@ class _ChatScreenState extends State<ChatScreen> {
       context: context,
       showDragHandle: true,
       builder: (context) {
-        final canDelete = message.isMine(widget.repository.currentUserId);
+        final canDelete = message.isMine(ref.read(chatThreadRepositoryProvider).currentUserId);
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -189,8 +178,8 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       );
     } else if (action == _MessageAction.delete &&
-        message.isMine(widget.repository.currentUserId)) {
-      await widget.repository.deleteMessage(widget.threadId, message.id);
+        message.isMine(ref.read(chatThreadRepositoryProvider).currentUserId)) {
+      await ref.read(chatThreadRepositoryProvider).deleteMessage(widget.threadId, message.id);
     }
   }
 
@@ -249,8 +238,6 @@ class _ChatScreenState extends State<ChatScreen> {
       MaterialPageRoute(
         builder: (context) => ProfileScreen(
           strings: widget.strings,
-          repository: widget.itemRepository,
-          chatRepository: widget.repository,
           userId: widget.otherUserId,
         ),
       ),
@@ -259,7 +246,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final typing = widget.repository.isTyping(widget.threadId);
+    final typing = ref.watch(chatThreadRepositoryProvider).isTyping(widget.threadId);
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFD),
       appBar: AppBar(
@@ -386,11 +373,8 @@ class _ChatScreenState extends State<ChatScreen> {
         _MessageBubble(
           key: ValueKey(message.id),
           message: message,
-          otherInitials: chatInitials(
-            widget.otherUserId,
-            widget.strings.campusMember,
-          ),
-          currentUserId: widget.repository.currentUserId,
+          otherUserId: widget.otherUserId,
+          currentUserId: ref.read(chatThreadRepositoryProvider).currentUserId,
           onLongPress: () => unawaited(_showMessageActions(message)),
           onRetry: message.status == ChatMessageStatus.failed
               ? () => unawaited(_retryMessage(message))
@@ -402,10 +386,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (typing) {
       rows.add(
         _TypingBubble(
-          initials: chatInitials(
-            widget.otherUserId,
-            widget.strings.campusMember,
-          ),
+          otherUserId: widget.otherUserId,
         ),
       );
     }
@@ -724,14 +705,14 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     super.key,
     required this.message,
-    required this.otherInitials,
+    required this.otherUserId,
     required this.currentUserId,
     required this.onLongPress,
     required this.onRetry,
   });
 
   final ChatMessage message;
-  final String otherInitials;
+  final String otherUserId;
   final String currentUserId;
   final VoidCallback onLongPress;
   final VoidCallback? onRetry;
@@ -813,17 +794,9 @@ class _MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!mine) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: const Color(0xFFE5EEF9),
-              child: Text(
-                otherInitials,
-                style: const TextStyle(
-                  color: Color(0xFF102A5C),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+            UserAvatar(
+              userId: otherUserId,
+              size: 32,
             ),
             const SizedBox(width: 8),
           ],
@@ -975,9 +948,9 @@ class _TimestampSeparator extends StatelessWidget {
 }
 
 class _TypingBubble extends StatelessWidget {
-  const _TypingBubble({required this.initials});
+  const _TypingBubble({required this.otherUserId});
 
-  final String initials;
+  final String otherUserId;
 
   @override
   Widget build(BuildContext context) {
@@ -986,17 +959,9 @@ class _TypingBubble extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: const Color(0xFFE5EEF9),
-            child: Text(
-              initials,
-              style: const TextStyle(
-                color: Color(0xFF102A5C),
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
+          UserAvatar(
+            userId: otherUserId,
+            size: 32,
           ),
           const SizedBox(width: 8),
           Container(

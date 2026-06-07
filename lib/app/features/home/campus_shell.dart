@@ -1,288 +1,76 @@
 import 'dart:async';
+import 'dart:ui';
 
-import 'package:flutter/cupertino.dart' show CupertinoSliverRefreshControl;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/chat_thread_repository.dart';
 import '../../data/models.dart';
-import '../../data/notification_repository.dart';
+import '../../data/providers.dart';
 import '../../shared/l10n/app_strings.dart';
-import '../../shared/widgets/common_widgets.dart';
 import '../add_item/add_item_screen.dart';
 import '../chat/chat_inbox_screen.dart';
-import '../details/item_details_screen.dart';
 import '../notifications/notification_screen.dart';
 import '../profile/profile_screen.dart';
+import '../auth/auth_state.dart';
+import '../auth/login_screen.dart';
+import 'feed_state.dart';
+import 'views/favorites_view.dart';
+import 'views/home_feed_view.dart';
+import 'views/my_posts_view.dart';
 
-class CampusShell extends StatefulWidget {
-  const CampusShell({
-    super.key,
-    required this.locale,
-    required this.themeMode,
-    required this.onToggleLanguage,
-    required this.onLocaleChanged,
-    required this.onThemeModeChanged,
-  });
-
-  final Locale locale;
-  final ThemeMode themeMode;
-  final VoidCallback onToggleLanguage;
-  final ValueChanged<Locale> onLocaleChanged;
-  final ValueChanged<ThemeMode> onThemeModeChanged;
+class CampusShell extends ConsumerStatefulWidget {
+  const CampusShell({super.key});
 
   @override
-  State<CampusShell> createState() => _CampusShellState();
+  ConsumerState<CampusShell> createState() => _CampusShellState();
 }
 
-class _CampusShellState extends State<CampusShell> {
-  final ScrollController _scrollController = ScrollController();
-  final TextEditingController _searchController = TextEditingController();
-  final ItemPostRepository _repository = ItemPostRepository();
-  final ChatThreadRepository _chatRepository = ChatThreadRepository();
-  final NotificationRepository _notificationRepository = NotificationRepository();
+class _CampusShellState extends ConsumerState<CampusShell> {
   late final PageController _pageController;
-
-  int _visibleCount = 8;
-  FilterState _filters = const FilterState();
-  String _query = '';
   int _navIndex = 0;
   bool _animatingToPage = false;
 
   bool get _arabic => Localizations.localeOf(context).languageCode == 'ar';
-
   AppStrings get strings => AppStrings.of(context);
+  ItemPostRepository get _repository => ref.read(itemPostRepositoryProvider);
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _navIndex);
-    _scrollController.addListener(_loadMoreWhenNearBottom);
-    _repository.addListener(_onRepositoryChanged);
-    _searchController.addListener(() {
-      setState(() {
-        _query = _searchController.text.trim().toLowerCase();
-        _visibleCount = 8;
-      });
-    });
-    _chatRepository.addListener(_onRepositoryChanged);
-    _notificationRepository.addListener(_onRepositoryChanged);
-
-    // Setup background chat incoming message notification trigger
-    _chatRepository.onIncomingMessage = (thread, message) {
-      if (!mounted) return;
-      final senderName = thread.participantId == 'staff-42'
-          ? (strings.localeName == 'ar' ? 'مكتب الأمن' : 'Staff 42')
-          : thread.participantId;
-      unawaited(_notificationRepository.addNotification(
-        title: 'New message from $senderName',
-        body: message.text,
-        type: NotificationType.chat,
-        associatedItemId: thread.itemId,
-      ));
-    };
-
-    // Setup matching lost & found engine notification trigger
-    _repository.onPostAdded = (post) {
-      if (!mounted) return;
-      if (post.type == PostType.lost) {
-        final matches = _repository.posts.where((existing) =>
-          existing.type == PostType.found &&
-          existing.category == post.category
-        ).toList();
-
-        if (matches.isNotEmpty) {
-          final bestMatch = matches.first;
-          Future.delayed(const Duration(seconds: 2), () {
-            if (!mounted) return;
-            unawaited(_notificationRepository.addNotification(
-              title: 'Potential Match Found',
-              body: 'Someone found an item matching your "${post.title ?? post.description}" at ${bestMatch.location.placeLabel}!',
-              type: NotificationType.match,
-              associatedItemId: bestMatch.id,
-            ));
-          });
-        }
-      } else if (post.type == PostType.found) {
-        final matches = _repository.posts.where((existing) =>
-          existing.type == PostType.lost &&
-          existing.category == post.category
-        ).toList();
-
-        if (matches.isNotEmpty) {
-          final bestMatch = matches.first;
-          Future.delayed(const Duration(seconds: 2), () {
-            if (!mounted) return;
-            unawaited(_notificationRepository.addNotification(
-              title: 'Item Match Near You',
-              body: 'A found "${post.title ?? post.description}" matches a lost item reported near ${bestMatch.location.placeLabel}!',
-              type: NotificationType.match,
-              associatedItemId: bestMatch.id,
-            ));
-          });
-        }
-      }
-    };
-
-    unawaited(_loadRepositories());
   }
 
   @override
   void dispose() {
-    _repository.removeListener(_onRepositoryChanged);
-    _chatRepository.removeListener(_onRepositoryChanged);
-    _notificationRepository.removeListener(_onRepositoryChanged);
     _pageController.dispose();
-    _scrollController.dispose();
-    _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadRepositories() async {
-    await _repository.load();
-    await _chatRepository.load(seedPosts: _repository.posts);
-    await _notificationRepository.load();
-  }
-
-  void _onRepositoryChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  void _loadMoreWhenNearBottom() {
-    if (!_scrollController.hasClients) return;
-    final position = _scrollController.position;
-    if (position.pixels > position.maxScrollExtent - 260) {
-      final total = _filteredPosts.length;
-      if (_visibleCount < total) {
-        setState(() {
-          _visibleCount = (_visibleCount + 4).clamp(0, total);
-        });
-      }
-    }
-  }
-
-  List<ItemPost> get _filteredPosts {
-    final now = DateTime.now();
-    return _repository.posts.where((post) {
-      final searchable = [
-        itemPostTitle(post, strings),
-        itemPostDescription(post, strings),
-        categoryLabel(post.category, strings),
-        campusLocationLabel(post.location, strings),
-        statusLabel(post.status, strings),
-      ].join(' ').toLowerCase();
-
-      final matchesQuery = _query.isEmpty || searchable.contains(_query);
-      final matchesStatus =
-          _filters.status == null || post.status == _filters.status;
-      final matchesCategory =
-          _filters.category == null || post.category == _filters.category;
-      final matchesLocation =
-          _filters.locationLabel == null ||
-          post.location.placeLabel == _filters.locationLabel;
-      final age = now.difference(post.dateTime);
-      final matchesDate = switch (_filters.dateFilter) {
-        DateFilter.any => true,
-        DateFilter.today => age.inHours < 24,
-        DateFilter.week => age.inDays < 7,
-        DateFilter.month => age.inDays < 31,
-      };
-
-      return matchesQuery &&
-          matchesStatus &&
-          matchesCategory &&
-          matchesLocation &&
-          matchesDate;
-    }).toList()..sort((a, b) => b.dateTime.compareTo(a.dateTime));
-  }
-
   Future<void> _openAddItem() async {
+    if (ref.read(authProvider).isGuest) {
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      return;
+    }
+
     final created = await Navigator.of(context).push<ItemPost>(
       MaterialPageRoute(
-        builder: (_) =>
-            AddItemScreen(strings: strings, repository: _repository),
+        builder: (_) => AddItemScreen(strings: strings, repository: _repository),
       ),
     );
 
     if (created != null) {
-      setState(() => _visibleCount = 8);
+      ref.read(feedFilterProvider.notifier).reset();
+      ref.read(feedQueryProvider.notifier).clear();
       await _selectTab(2);
     }
   }
 
-  List<ItemPost> get _myPosts {
-    return _repository.posts
-        .where((post) => post.createdBy.userId == 'current-user')
-        .toList()
-      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
-  }
-
-  List<ItemPost> get _favoritePosts {
-    return _repository.posts.where((post) => post.isFavorite).toList()
-      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
-  }
-
-  Future<void> _openFilters() async {
-    final result = await showModalBottomSheet<FilterState>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => FilterSheet(
-        initial: _filters,
-        strings: strings,
-        locations: campusLocations.map((e) => e.placeLabel).toList(),
-        locationLabelBuilder: (label) =>
-            campusLocationLabelText(label, strings),
-      ),
-    );
-
-    if (result == null) return;
-    setState(() {
-      _filters = result;
-      _visibleCount = 8;
-    });
-  }
-
-  void _resetFilters() {
-    setState(() {
-      _filters = const FilterState();
-      _visibleCount = 8;
-    });
-  }
-
   Future<void> _openExploreFeed({bool resetDiscovery = false}) async {
     if (resetDiscovery) {
-      setState(() {
-        _filters = const FilterState();
-        _query = '';
-        _visibleCount = 8;
-      });
-      if (_searchController.text.isNotEmpty) {
-        _searchController.clear();
-      }
+      ref.read(feedFilterProvider.notifier).reset();
+      ref.read(feedQueryProvider.notifier).clear();
     }
     await _selectTab(0);
-  }
-
-  Future<void> _toggleFavorite(ItemPost post) async {
-    await _repository.toggleFavorite(post.id);
-  }
-
-  void _openDetails(ItemPost post) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ItemDetailsScreen(
-          postId: post.id,
-          repository: _repository,
-          chatRepository: _chatRepository,
-          initialPost: post,
-          strings: strings,
-        ),
-      ),
-    );
   }
 
   Future<void> _selectTab(int index) async {
@@ -306,29 +94,39 @@ class _CampusShellState extends State<CampusShell> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(itemPostRepositoryProvider);
+    ref.watch(chatThreadRepositoryProvider);
+    
     return Directionality(
       textDirection: _arabic ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
+        extendBody: true,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: PageView(
           controller: _pageController,
           physics: const BouncingScrollPhysics(),
           onPageChanged: _handlePageChanged,
           children: [
-            _buildHomeView(),
-            _buildFavoritesView(),
-            _buildMyPostsView(),
-            _buildChatListView(),
-            ProfileScreen(
+            HomeFeedView(strings: strings),
+            FavoritesView(
               strings: strings,
-              locale: widget.locale,
-              themeMode: widget.themeMode,
-              onLocaleChanged: widget.onLocaleChanged,
-              onThemeModeChanged: widget.onThemeModeChanged,
-              onToggleLanguage: widget.onToggleLanguage,
-              repository: _repository,
-              chatRepository: _chatRepository,
+              onOpenExploreFeed: () => _openExploreFeed(resetDiscovery: true),
             ),
+            MyPostsView(
+              strings: strings,
+              onOpenExploreFeed: () => _openExploreFeed(resetDiscovery: true),
+              onItemCreated: () => _openExploreFeed(resetDiscovery: true),
+            ),
+            ChatInboxScreen(
+              strings: strings,
+              onLanguageToggle: () => ref.read(localeProvider.notifier).toggleLocale(),
+              languageLabel: _arabic ? 'EN' : 'AR',
+              onNotificationsTap: () {
+                 Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationScreen()));
+              },
+              hasUnreadNotifications: ref.watch(notificationRepositoryProvider).unreadCount > 0,
+            ),
+            ProfileScreen(strings: strings),
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(
@@ -338,9 +136,12 @@ class _CampusShellState extends State<CampusShell> {
           backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Theme.of(context).colorScheme.onPrimary,
         ),
-        bottomNavigationBar: NavigationBarTheme(
-          data: NavigationBarThemeData(
-            backgroundColor: Theme.of(context).cardColor,
+        bottomNavigationBar: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: NavigationBarTheme(
+              data: NavigationBarThemeData(
+                backgroundColor: Theme.of(context).cardColor.withValues(alpha: 0.75),
             indicatorColor: Theme.of(context).colorScheme.primaryContainer,
             labelTextStyle: WidgetStateProperty.resolveWith((states) {
               final selected = states.contains(WidgetState.selected);
@@ -367,6 +168,10 @@ class _CampusShellState extends State<CampusShell> {
             height: 76,
             onDestinationSelected: (index) {
               if (_animatingToPage) return;
+              if (index != 0 && ref.read(authProvider).isGuest) {
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+                return;
+              }
               unawaited(_selectTab(index));
             },
             destinations: [
@@ -398,726 +203,9 @@ class _CampusShellState extends State<CampusShell> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildHomeView() {
-    return SafeArea(
-      child: CustomScrollView(
-        controller: _scrollController,
-        slivers: [
-          CupertinoSliverRefreshControl(
-            onRefresh: () async {
-              await HapticFeedback.lightImpact();
-              await Future<void>.delayed(const Duration(milliseconds: 1200));
-              await HapticFeedback.mediumImpact();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(_arabic ? 'تم تحديث البلاغات بنجاح!' : 'Campus feed updated successfully!'),
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-              }
-            },
-          ),
-          SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                PremiumHomeHeader(
-                  title: _arabic ? 'مفقودات وموجودات' : 'Lost & Found',
-                  subtitle: _arabic ? 'مجتمع جامعتنا' : strings.splashSubtitle,
-                  onNotificationsTap: _openNotifications,
-                  hasUnreadNotifications: _notificationRepository.unreadCount > 0,
-                ),
-                PremiumHomeSearchBar(
-                  controller: _searchController,
-                  hint: _arabic
-                      ? 'ابحث عن غرض مفقود أو موجود'
-                      : strings.searchHint,
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      FilterChipsRow(
-                        filters: _filters,
-                        strings: strings,
-                        onFilterTap: _openFilters,
-                        onReset: _resetFilters,
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          Text(
-                            strings.latestPosts,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(
-                                  color: const Color(0xFF111827),
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                          const Spacer(),
-                          if (_filters.hasActiveFilters || _query.isNotEmpty)
-                            Text(
-                              '${_filteredPosts.length} ${strings.results}',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: const Color(0xFF6B7280)),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_filteredPosts.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: EmptyState(
-                title: strings.noItems,
-                subtitle: strings.emptyHint,
-                resetLabel: strings.reset,
-                onReset: _resetFilters,
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 104),
-              sliver: SliverList.separated(
-                itemCount: _filteredPosts.length > _visibleCount
-                    ? _visibleCount + 1
-                    : _filteredPosts.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  if (index >= _filteredPosts.take(_visibleCount).length) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 18),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  final visible = _filteredPosts.take(_visibleCount).toList();
-                  final post = visible[index];
-                  return FadeInSlide(
-                    delay: Duration(milliseconds: (index % 6) * 80),
-                    child: ItemPostCard(
-                      post: post,
-                      strings: strings,
-                      onTap: () => _openDetails(post),
-                      onFavorite: () => _toggleFavorite(post),
-                    ),
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMyPostsView() {
-    final posts = _myPosts;
-    return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  HeaderBar(
-                    title: strings.myPosts,
-                    subtitle: strings.appName,
-                    onLanguageToggle: widget.onToggleLanguage,
-                    languageLabel: _arabic ? 'EN' : 'AR',
-                    onNotificationsTap: _openNotifications,
-                    hasUnreadNotifications: _notificationRepository.unreadCount > 0,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '${posts.length} ${strings.results}',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF64748B),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (posts.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: _MyPostsEmptyState(
-                title: strings.noMyPosts,
-                subtitle: strings.myPostsEmptyHint,
-                actionLabel: strings.addReport,
-                onAction: _openAddItem,
-                secondaryLabel: strings.home,
-                onSecondaryAction: () =>
-                    unawaited(_openExploreFeed(resetDiscovery: true)),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 104),
-              sliver: SliverList.separated(
-                itemCount: posts.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final post = posts[index];
-                  return FadeInSlide(
-                    delay: Duration(milliseconds: (index % 6) * 80),
-                    child: ItemPostCard(
-                      post: post,
-                      strings: strings,
-                      onTap: () => _openDetails(post),
-                      onFavorite: () => _toggleFavorite(post),
-                    ),
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFavoritesView() {
-    final posts = _favoritePosts;
-    return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
-              child: HeaderBar(
-                title: strings.favorites,
-                subtitle: strings.appName,
-                onLanguageToggle: widget.onToggleLanguage,
-                languageLabel: _arabic ? 'EN' : 'AR',
-                onNotificationsTap: _openNotifications,
-                hasUnreadNotifications: _notificationRepository.unreadCount > 0,
-              ),
-            ),
-          ),
-          if (posts.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: EmptyState(
-                title: strings.favorites,
-                subtitle: strings.emptyHint,
-                resetLabel: strings.home,
-                onReset: () =>
-                    unawaited(_openExploreFeed(resetDiscovery: true)),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 104),
-              sliver: SliverList.separated(
-                itemCount: posts.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final post = posts[index];
-                  return FadeInSlide(
-                    delay: Duration(milliseconds: (index % 6) * 80),
-                    child: ItemPostCard(
-                      post: post,
-                      strings: strings,
-                      onTap: () => _openDetails(post),
-                      onFavorite: () => _toggleFavorite(post),
-                    ),
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChatListView() {
-    return ChatInboxScreen(
-      strings: strings,
-      chatRepository: _chatRepository,
-      itemRepository: _repository,
-      onLanguageToggle: widget.onToggleLanguage,
-      languageLabel: _arabic ? 'EN' : 'AR',
-      onNotificationsTap: _openNotifications,
-      hasUnreadNotifications: _notificationRepository.unreadCount > 0,
-    );
-  }
-
-  void _openNotifications() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => NotificationScreen(
-          repository: _notificationRepository,
-          itemRepository: _repository,
-          chatRepository: _chatRepository,
-        ),
-      ),
-    );
-  }
-}
-
-class _MyPostsEmptyState extends StatelessWidget {
-  const _MyPostsEmptyState({
-    required this.title,
-    required this.subtitle,
-    required this.actionLabel,
-    required this.onAction,
-    this.secondaryLabel,
-    this.onSecondaryAction,
-  });
-
-  final String title;
-  final String subtitle;
-  final String actionLabel;
-  final VoidCallback onAction;
-  final String? secondaryLabel;
-  final VoidCallback? onSecondaryAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: Color(0xFFEAF2FF),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.list_alt_rounded,
-                size: 48,
-                color: Color(0xFF102A5C),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: const Color(0xFF102A5C),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF64748B)),
-            ),
-            const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: onAction,
-              icon: const Icon(Icons.add_rounded),
-              label: Text(actionLabel),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-                backgroundColor: const Color(0xFF102A5C),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
-            if (secondaryLabel != null && onSecondaryAction != null) ...[
-              const SizedBox(height: 10),
-              TextButton.icon(
-                onPressed: onSecondaryAction,
-                icon: const Icon(Icons.explore_outlined),
-                label: Text(secondaryLabel!),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size.fromHeight(46),
-                  foregroundColor: const Color(0xFF1D4ED8),
-                  textStyle: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class FilterSheet extends StatefulWidget {
-  const FilterSheet({
-    super.key,
-    required this.initial,
-    required this.strings,
-    required this.locations,
-    required this.locationLabelBuilder,
-  });
-
-  final FilterState initial;
-  final AppStrings strings;
-  final List<String> locations;
-  final String Function(String location) locationLabelBuilder;
-
-  @override
-  State<FilterSheet> createState() => _FilterSheetState();
-}
-
-class _FilterSheetState extends State<FilterSheet> {
-  late FilterState _draft = widget.initial;
-
-  void _selectStatus(PostStatus? status) {
-    setState(() {
-      _draft = _draft.copyWith(status: status, clearStatus: status == null);
-    });
-  }
-
-  void _resetAndClose() {
-    Navigator.pop(context, const FilterState());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = widget.strings;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    
-    final primary = Theme.of(context).colorScheme.primary;
-    final surface = Theme.of(context).inputDecorationTheme.fillColor ?? Theme.of(context).colorScheme.surfaceContainerHighest;
-    final border = Theme.of(context).colorScheme.outlineVariant;
-    final text = Theme.of(context).colorScheme.onSurface;
-
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(context).brightness == Brightness.light
-                  ? const Color(0x1A102A5C)
-                  : Colors.black.withValues(alpha: 0.3),
-              blurRadius: 28,
-              offset: const Offset(0, -8),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(18, 8, 18, bottomInset + 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SheetHandle(),
-                Row(
-                  children: [
-                    Text(
-                      strings.filters,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: primary,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded),
-                      tooltip: strings.cancel,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _SectionHeader(title: strings.status),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _StatusChip(
-                      label: strings.allStatuses,
-                      dotColor: primary,
-                      selected: _draft.status == null,
-                      onTap: () => _selectStatus(null),
-                    ),
-                    _StatusChip(
-                      label: strings.lost,
-                      dotColor: const Color(0xFFE9435A),
-                      selected: _draft.status == PostStatus.lost,
-                      onTap: () => _selectStatus(PostStatus.lost),
-                    ),
-                    _StatusChip(
-                      label: strings.found,
-                      dotColor: const Color(0xFF15A56E),
-                      selected: _draft.status == PostStatus.found,
-                      onTap: () => _selectStatus(PostStatus.found),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                _SectionHeader(title: strings.category),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _CategoryChip(
-                      label: strings.allCategories,
-                      icon: Icons.grid_view_rounded,
-                      selected: _draft.category == null,
-                      onTap: () => setState(
-                        () => _draft = _draft.copyWith(clearCategory: true),
-                      ),
-                    ),
-                    ...ItemCategory.values.map((category) {
-                      return _CategoryChip(
-                        label: categoryLabel(category, strings),
-                        icon: categoryIcon(category),
-                        selected: _draft.category == category,
-                        onTap: () => setState(
-                           () => _draft = _draft.copyWith(category: category),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                _SectionHeader(title: strings.date),
-                const SizedBox(height: 8),
-                RadioGroup<DateFilter>(
-                  groupValue: _draft.dateFilter,
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _draft = _draft.copyWith(dateFilter: value));
-                  },
-                  child: Column(
-                    children: DateFilter.values.map((filter) {
-                      return RadioListTile<DateFilter>(
-                        value: filter,
-                        activeColor: primary,
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        visualDensity: VisualDensity.compact,
-                        controlAffinity: ListTileControlAffinity.trailing,
-                        title: Text(
-                          dateFilterLabel(filter, strings),
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: text,
-                              ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _SectionHeader(title: strings.location),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String?>(
-                  initialValue: _draft.locationLabel,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: strings.location,
-                    hintText: strings.allLocations,
-                    prefixIcon: const Icon(Icons.place_outlined),
-                    filled: true,
-                    fillColor: surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: border),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: primary, width: 1.4),
-                    ),
-                  ),
-                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                  items: [
-                    DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text(strings.allLocations),
-                    ),
-                    ...widget.locations.map(
-                      (location) => DropdownMenuItem<String?>(
-                        value: location,
-                        child: Text(widget.locationLabelBuilder(location)),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      _draft = value == null
-                          ? _draft.copyWith(clearLocation: true)
-                          : _draft.copyWith(locationLabel: value);
-                    });
-                  },
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _resetAndClose,
-                        icon: const Icon(Icons.restart_alt_rounded),
-                        label: Text(strings.reset),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(54),
-                          foregroundColor: primary,
-                          side: BorderSide(color: border),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => Navigator.pop(context, _draft),
-                        icon: const Icon(Icons.tune_rounded),
-                        label: Text(strings.apply),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(54),
-                          backgroundColor: primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-        fontWeight: FontWeight.w900,
-        color: Theme.of(context).colorScheme.primary,
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({
-    required this.label,
-    required this.dotColor,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final Color dotColor;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final border = Theme.of(context).colorScheme.outlineVariant;
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-    return ChoiceChip(
-      selected: selected,
-      showCheckmark: false,
-      onSelected: (_) => onTap(),
-      avatar: Container(
-        width: 10,
-        height: 10,
-        decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
-      ),
-      label: Text(label),
-      labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-        fontWeight: FontWeight.w800,
-        color: selected ? primary : onSurface,
-      ),
-      backgroundColor: Theme.of(context).cardColor,
-      selectedColor: dotColor.withValues(alpha: 0.12),
-      side: BorderSide(color: selected ? dotColor : border),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-    );
-  }
-}
-
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final border = Theme.of(context).colorScheme.outlineVariant;
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-    return ChoiceChip(
-      selected: selected,
-      showCheckmark: false,
-      onSelected: (_) => onTap(),
-      avatar: Icon(
-        icon,
-        size: 18,
-        color: selected ? primary : Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      label: Text(label),
-      labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-        fontWeight: FontWeight.w800,
-        color: selected ? primary : onSurface,
-      ),
-      backgroundColor: Theme.of(context).cardColor,
-      selectedColor: primary.withValues(alpha: 0.12),
-      side: BorderSide(color: selected ? primary : border),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
     );
   }
 }

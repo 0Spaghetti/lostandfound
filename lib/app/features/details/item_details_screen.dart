@@ -2,37 +2,36 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shimmer/shimmer.dart';
 
-import '../../data/chat_thread_repository.dart';
 import '../../data/models.dart';
+import '../../data/providers.dart';
 import '../../shared/l10n/app_strings.dart';
 import '../../shared/widgets/common_widgets.dart';
 import '../add_item/add_item_screen.dart';
 import '../chat/chat_screen.dart';
 import '../profile/profile_screen.dart';
 
-class ItemDetailsScreen extends StatefulWidget {
+class ItemDetailsScreen extends ConsumerStatefulWidget {
   const ItemDetailsScreen({
     super.key,
     required this.postId,
-    required this.repository,
-    required this.chatRepository,
     required this.strings,
     this.initialPost,
   });
 
   final String postId;
-  final ItemPostRepository repository;
-  final ChatThreadRepository chatRepository;
   final ItemPost? initialPost;
   final AppStrings strings;
 
   @override
-  State<ItemDetailsScreen> createState() => _ItemDetailsScreenState();
+  ConsumerState<ItemDetailsScreen> createState() => _ItemDetailsScreenState();
 }
 
-class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
+class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
   final PageController _carouselController = PageController();
+  late final ItemPostRepository _itemPostRepository;
 
   ItemPost? _post;
   bool _loading = true;
@@ -49,29 +48,31 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     super.initState();
     _post = widget.initialPost;
     _loading = widget.initialPost == null;
-    widget.repository.addListener(_syncFromRepository);
+    _itemPostRepository = ref.read(itemPostRepositoryProvider);
+    _itemPostRepository.addListener(_syncFromRepository);
     unawaited(_resolvePost());
   }
 
   @override
   void dispose() {
-    widget.repository.removeListener(_syncFromRepository);
+    _itemPostRepository.removeListener(_syncFromRepository);
     _carouselController.dispose();
     super.dispose();
   }
 
   Future<void> _resolvePost() async {
-    if (!widget.repository.isLoaded) {
-      await widget.repository.load();
+    final repository = ref.read(itemPostRepositoryProvider);
+    if (!repository.isLoaded) {
+      await repository.load();
       if (!mounted) return;
     }
 
-    final index = widget.repository.posts.indexWhere(
+    final index = repository.posts.indexWhere(
       (post) => post.id == widget.postId,
     );
     if (index >= 0) {
       setState(() {
-        _post = widget.repository.posts[index];
+        _post = repository.posts[index];
         _loading = false;
         _error = false;
         _deleted = false;
@@ -100,14 +101,15 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
   }
 
   void _syncFromRepository() {
-    final index = widget.repository.posts.indexWhere(
+    final repository = ref.read(itemPostRepositoryProvider);
+    final index = repository.posts.indexWhere(
       (post) => post.id == widget.postId,
     );
     if (!mounted) return;
 
     if (index >= 0) {
       setState(() {
-        _post = widget.repository.posts[index];
+        _post = repository.posts[index];
         _loading = false;
         _error = false;
         _deleted = false;
@@ -140,7 +142,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
   Future<void> _toggleFavorite() async {
     final post = _post;
     if (post == null) return;
-    await widget.repository.toggleFavorite(post.id);
+    await ref.read(itemPostRepositoryProvider).toggleFavorite(post.id);
   }
 
   Future<void> _markRecovered() async {
@@ -164,7 +166,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
       ),
     );
     if (confirm != true) return;
-    await widget.repository.updateStatus(post.id, PostStatus.recovered);
+    await ref.read(itemPostRepositoryProvider).updateStatus(post.id, PostStatus.recovered);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -195,7 +197,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
       ),
     );
     if (confirm != true) return;
-    await widget.repository.deletePost(post.id);
+    await ref.read(itemPostRepositoryProvider).deletePost(post.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -208,7 +210,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
   Future<void> _openChat() async {
     final post = _post;
     if (post == null) return;
-    final thread = await widget.chatRepository.openThreadForPost(
+    final thread = await ref.read(chatThreadRepositoryProvider).openThreadForPost(
       post,
       itemPostTitle(post, widget.strings),
     );
@@ -216,8 +218,6 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatScreen(
-          repository: widget.chatRepository,
-          itemRepository: widget.repository,
           threadId: thread.id,
           itemId: post.id,
           otherUserId: thread.participantId,
@@ -230,8 +230,6 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
               MaterialPageRoute(
                 builder: (_) => ItemDetailsScreen(
                   postId: post.id,
-                  repository: widget.repository,
-                  chatRepository: widget.chatRepository,
                   strings: widget.strings,
                   initialPost: post,
                 ),
@@ -250,7 +248,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
       MaterialPageRoute(
         builder: (_) => AddItemScreen(
           strings: widget.strings,
-          repository: widget.repository,
+          repository: ref.read(itemPostRepositoryProvider),
           existingPost: post,
         ),
       ),
@@ -283,8 +281,6 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
       MaterialPageRoute(
         builder: (context) => ProfileScreen(
           strings: widget.strings,
-          repository: widget.repository,
-          chatRepository: widget.chatRepository,
           userId: post.createdBy.userId,
         ),
       ),
@@ -565,11 +561,17 @@ class _DetailsBody extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        Text(
-          itemPostTitle(post, strings),
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w900,
-            color: const Color(0xFF0A2758),
+        Hero(
+          tag: 'title-${post.id}',
+          child: Material(
+            type: MaterialType.transparency,
+            child: Text(
+              itemPostTitle(post, strings),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF0A2758),
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -993,60 +995,68 @@ class _DetailsSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
     Widget bar([double width = double.infinity, double height = 14]) {
       return Container(
         width: width,
         height: height,
         decoration: BoxDecoration(
-          color: const Color(0xFFE8EEF7),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(999),
         ),
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 120),
-      children: [
-        Container(
-          height: 360,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8EEF7),
-            borderRadius: BorderRadius.circular(24),
+    return Shimmer.fromColors(
+      baseColor: baseColor,
+      highlightColor: highlightColor,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 120),
+        children: [
+          Container(
+            height: 360,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+            ),
           ),
-        ),
-        const SizedBox(height: 18),
-        bar(240, 24),
-        const SizedBox(height: 10),
-        bar(140),
-        const SizedBox(height: 18),
-        Container(
-          height: 112,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
+          const SizedBox(height: 18),
+          bar(240, 24),
+          const SizedBox(height: 10),
+          bar(140),
+          const SizedBox(height: 18),
+          Container(
+            height: 112,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+            ),
           ),
-        ),
-        const SizedBox(height: 18),
-        bar(160, 18),
-        const SizedBox(height: 8),
-        Container(
-          height: 110,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
+          const SizedBox(height: 18),
+          bar(160, 18),
+          const SizedBox(height: 8),
+          Container(
+            height: 110,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+            ),
           ),
-        ),
-        const SizedBox(height: 18),
-        bar(140, 18),
-        const SizedBox(height: 8),
-        Container(
-          height: 180,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
+          const SizedBox(height: 18),
+          bar(140, 18),
+          const SizedBox(height: 8),
+          Container(
+            height: 180,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

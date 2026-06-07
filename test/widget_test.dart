@@ -1,16 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lostandfound/main.dart';
+import 'package:lostandfound/app/data/providers.dart';
 
 void main() {
   testWidgets('shows splash then home for returning users', (tester) async {
     SharedPreferences.setMockInitialValues({
       'lost_found_onboarding_seen_v1': true,
     });
+    final prefs = await SharedPreferences.getInstance();
 
-    await tester.pumpWidget(const LostFoundCampusApp());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+        child: const LostFoundCampusApp(),
+      ),
+    );
     expect(find.byType(SplashScreen), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 3));
@@ -25,8 +35,16 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({'settings_locale': 'en'});
+    final prefs = await SharedPreferences.getInstance();
 
-    await tester.pumpWidget(const LostFoundCampusApp());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+        child: const LostFoundCampusApp(),
+      ),
+    );
     expect(find.byType(SplashScreen), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 3));
@@ -34,7 +52,7 @@ void main() {
 
     expect(find.byType(OnboardingScreen), findsOneWidget);
     expect(find.text('Post lost or found items fast'), findsOneWidget);
-    expect(find.text('Get started'), findsOneWidget);
+    expect(find.text('Next'), findsOneWidget);
     expect(find.text('Continue as Guest'), findsOneWidget);
 
     await tester.drag(find.byType(PageView), const Offset(-500, 0));
@@ -48,8 +66,8 @@ void main() {
     await tester.tap(find.text('Continue as Guest'));
     await tester.pumpAndSettle();
 
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool('onboardingCompleted'), isTrue);
+    final activePrefs = await SharedPreferences.getInstance();
+    expect(activePrefs.getBool('onboardingCompleted'), isTrue);
     expect(find.text('Latest posts'), findsOneWidget);
   });
 
@@ -57,11 +75,23 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({'settings_locale': 'en'});
+    final prefs = await SharedPreferences.getInstance();
 
-    await tester.pumpWidget(const LostFoundCampusApp());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+        child: const LostFoundCampusApp(),
+      ),
+    );
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Get started'));
     await tester.pumpAndSettle();
 
@@ -72,8 +102,8 @@ void main() {
     await tester.tap(find.text('Not now'));
     await tester.pumpAndSettle();
 
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool('onboardingCompleted'), isTrue);
+    final activePrefs = await SharedPreferences.getInstance();
+    expect(activePrefs.getBool('onboardingCompleted'), isTrue);
     expect(find.text('Latest posts'), findsOneWidget);
   });
 
@@ -82,8 +112,16 @@ void main() {
       'settings_locale': 'en',
       'onboardingCompleted': true,
     });
+    final prefs = await SharedPreferences.getInstance();
 
-    await tester.pumpWidget(const LostFoundCampusApp());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+        child: const LostFoundCampusApp(),
+      ),
+    );
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
