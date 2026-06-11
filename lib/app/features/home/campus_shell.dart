@@ -121,6 +121,7 @@ class _CampusShellState extends ConsumerState<CampusShell> {
               strings: strings,
               onLanguageToggle: () => ref.read(localeProvider.notifier).toggleLocale(),
               languageLabel: _arabic ? 'EN' : 'AR',
+              onOpenExploreFeed: () => _openExploreFeed(resetDiscovery: true),
               onNotificationsTap: () {
                  Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationScreen()));
               },

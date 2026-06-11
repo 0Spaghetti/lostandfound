@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../features/auth/auth_state.dart';
 
 import 'package:lostandfound/l10n/generated/app_localizations.dart';
 
@@ -69,12 +71,18 @@ final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeMo
 class ProfileNameNotifier extends Notifier<String> {
   @override
   String build() {
+    ref.watch(authProvider); // React to auth changes
+    final firebaseName = FirebaseAuth.instance.currentUser?.displayName;
+    if (firebaseName != null && firebaseName.isNotEmpty) return firebaseName;
     return ref.watch(sharedPreferencesProvider).getString('settings_profile_name') ?? '';
   }
 
   Future<void> setName(String name) async {
     state = name;
     await ref.read(sharedPreferencesProvider).setString('settings_profile_name', name);
+    try {
+      await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
+    } catch (_) {}
   }
 }
 
@@ -83,12 +91,18 @@ final profileNameProvider = NotifierProvider<ProfileNameNotifier, String>(Profil
 class ProfileEmailNotifier extends Notifier<String> {
   @override
   String build() {
+    ref.watch(authProvider); // React to auth changes
+    final firebaseEmail = FirebaseAuth.instance.currentUser?.email;
+    if (firebaseEmail != null && firebaseEmail.isNotEmpty) return firebaseEmail;
     return ref.watch(sharedPreferencesProvider).getString('settings_profile_email') ?? '';
   }
 
   Future<void> setEmail(String email) async {
     state = email;
     await ref.read(sharedPreferencesProvider).setString('settings_profile_email', email);
+    try {
+      await FirebaseAuth.instance.currentUser?.verifyBeforeUpdateEmail(email);
+    } catch (_) {}
   }
 }
 
@@ -211,7 +225,9 @@ final filteredPostsProvider = Provider<List<ItemPost>>((ref) {
     ].join(' ').toLowerCase();
 
     final matchesQuery = query.isEmpty || searchable.contains(query);
-    final matchesStatus = filters.status == null || post.status == filters.status;
+    final matchesStatus = filters.status == null 
+        ? post.status != PostStatus.recovered 
+        : post.status == filters.status;
     final matchesCategory = filters.category == null || post.category == filters.category;
     final matchesLocation = filters.locationLabel == null || post.location.placeLabel == filters.locationLabel;
     

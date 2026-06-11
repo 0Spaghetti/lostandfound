@@ -12,6 +12,7 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../shared/l10n/app_strings.dart';
 import '../../shared/widgets/common_widgets.dart';
+import '../../shared/widgets/safety_widgets.dart';
 import '../profile/profile_screen.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -255,7 +256,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         elevation: 0,
         leading: IconButton(
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, semanticLabel: MaterialLocalizations.of(context).backButtonTooltip),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         titleSpacing: 0,
@@ -336,10 +337,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             strings: widget.strings,
             onTap: widget.onOpenItemDetails,
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(18, 4, 18, 0),
-            child: _SafetyNote(),
-          ),
+          if (_thread?.itemType == PostType.found)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 0),
+              child: SafetyGuidanceCard(
+                category: widget.itemCategory,
+                strings: widget.strings,
+              ),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.fromLTRB(18, 4, 18, 0),
+              child: _SafetyNote(),
+            ),
           SizedBox(height: MediaQuery.sizeOf(context).height * 0.16),
           _EmptyConversation(strings: widget.strings),
         ],
@@ -357,10 +367,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         strings: widget.strings,
         onTap: widget.onOpenItemDetails,
       ),
-      const Padding(
-        padding: EdgeInsets.fromLTRB(18, 4, 18, 2),
-        child: _SafetyNote(),
-      ),
+      if (_thread?.itemType == PostType.found)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 2),
+          child: SafetyGuidanceCard(
+            category: widget.itemCategory,
+            strings: widget.strings,
+          ),
+        )
+      else
+        const Padding(
+          padding: EdgeInsets.fromLTRB(18, 4, 18, 2),
+          child: _SafetyNote(),
+        ),
     ];
 
     for (var index = 0; index < _messages.length; index++) {
@@ -1152,7 +1171,7 @@ class _Composer extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   shape: const CircleBorder(),
                 ),
-                icon: const Icon(Icons.send_rounded, size: 20),
+                icon: Icon(Icons.send_rounded, size: 20, semanticLabel: AppStrings.of(context).send),
               ),
             ),
           ],

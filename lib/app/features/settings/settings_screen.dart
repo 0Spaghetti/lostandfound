@@ -92,9 +92,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               children: [
                 const Icon(Icons.help_outline_rounded, color: Color(0xFF1D4ED8)),
                 const SizedBox(width: 8),
-                Text(
-                  widget.strings.helpFaq,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                Expanded(
+                  child: Text(
+                    widget.strings.helpFaq,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
                 ),
               ],
             ),

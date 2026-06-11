@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' as intl;
 
@@ -32,6 +33,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
+  final FocusNode _titleFocusNode = FocusNode();
+  final FocusNode _descriptionFocusNode = FocusNode();
+  final PageController _pageController = PageController();
   final TextEditingController _contactController = TextEditingController();
   final TextEditingController _colorController = TextEditingController();
   final TextEditingController _brandController = TextEditingController();
@@ -49,6 +53,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   bool _publishing = false;
   bool _showErrors = false;
   bool _userManuallySelectedCategory = false;
+  int _currentStep = 0;
 
   AppStrings get strings => widget.strings;
 
@@ -111,102 +116,19 @@ class _AddItemScreenState extends State<AddItemScreen> {
     return null;
   }
 
-  Future<String> _createMockItemPhoto(ItemCategory category) async {
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 400, 400));
-    
-    final paint = Paint()
-      ..shader = ui.Gradient.linear(
-        const Offset(0, 0),
-        const Offset(400, 400),
-        switch (category) {
-          ItemCategory.electronics => [const Color(0xFFE8F1FF), const Color(0xFF3578F6)],
-          ItemCategory.keys => [const Color(0xFFFFC97C), const Color(0xFF9A5B10)],
-          ItemCategory.bag => [const Color(0xFF45678F), const Color(0xFF0A2758)],
-          ItemCategory.cards => [const Color(0xFFFDA4AF), const Color(0xFFE11D48)],
-          ItemCategory.other => [const Color(0xFF2DD4BF), const Color(0xFF0F766E)],
-        },
-      );
-    canvas.drawRect(const Rect.fromLTWH(0, 0, 400, 400), paint);
-    
-    final borderPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.2)
-      ..strokeWidth = 14
-      ..style = PaintingStyle.stroke;
-    canvas.drawRect(const Rect.fromLTWH(20, 20, 360, 360), borderPaint);
-    
-    final itemPaint = Paint()..color = Colors.white;
-    final center = const Offset(200, 200);
-    
-    switch (category) {
-      case ItemCategory.electronics:
-        canvas.drawCircle(center, 70, Paint()..color = Colors.white.withValues(alpha: 0.15));
-        canvas.drawCircle(const Offset(140, 200), 30, itemPaint);
-        canvas.drawCircle(const Offset(260, 200), 30, itemPaint);
-        canvas.drawArc(
-          Rect.fromCenter(center: center, width: 120, height: 120),
-          3.14,
-          3.14,
-          false,
-          Paint()
-            ..color = Colors.white
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 16
-            ..strokeCap = StrokeCap.round,
-        );
-        break;
-      case ItemCategory.keys:
-        canvas.drawCircle(const Offset(200, 160), 40, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 12);
-        canvas.drawRect(const Rect.fromLTWH(188, 200, 24, 90), itemPaint);
-        canvas.drawRect(const Rect.fromLTWH(206, 230, 24, 16), itemPaint);
-        canvas.drawRect(const Rect.fromLTWH(206, 260, 24, 16), itemPaint);
-        break;
-      case ItemCategory.bag:
-        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(130, 150, 140, 150), const Radius.circular(24)), itemPaint);
-        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(150, 220, 100, 70), const Radius.circular(12)), Paint()..color = Colors.white.withValues(alpha: 0.25));
-        canvas.drawArc(
-          Rect.fromCenter(center: const Offset(200, 150), width: 60, height: 60),
-          3.14,
-          3.14,
-          false,
-          Paint()
-            ..color = Colors.white
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 10,
-        );
-        break;
-      case ItemCategory.cards:
-        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(110, 130, 180, 120), const Radius.circular(16)), itemPaint);
-        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(130, 150, 40, 40), const Radius.circular(8)), Paint()..color = const Color(0xFF6B7280).withValues(alpha: 0.2));
-        canvas.drawRect(const Rect.fromLTWH(185, 150, 80, 12), Paint()..color = const Color(0xFF6B7280).withValues(alpha: 0.2));
-        canvas.drawRect(const Rect.fromLTWH(185, 170, 60, 10), Paint()..color = const Color(0xFF6B7280).withValues(alpha: 0.2));
-        break;
-      case ItemCategory.other:
-        canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(130, 150, 140, 120), const Radius.circular(12)), itemPaint);
-        canvas.drawRect(const Rect.fromLTWH(190, 120, 20, 170), Paint()..color = Colors.white.withValues(alpha: 0.3));
-        break;
-    }
-    
-    final picture = recorder.endRecording();
-    final img = await picture.toImage(400, 400);
-    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-    final bytes = byteData!.buffer.asUint8List();
-    return dataUriFromBytes(bytes);
-  }
 
   @override
   void dispose() {
-    _descriptionController
-      ..removeListener(_onTextChanged)
-      ..dispose();
-    _titleController
-      ..removeListener(_onTextChanged)
-      ..dispose();
+    _descriptionController.dispose();
+    _titleController.dispose();
+    _titleFocusNode.dispose();
+    _descriptionFocusNode.dispose();
     _contactController.dispose();
     _colorController.dispose();
     _brandController.dispose();
     _detailsController.dispose();
     _locationDetailController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -241,19 +163,6 @@ class _AddItemScreenState extends State<AddItemScreen> {
               title: Text(strings.gallery, style: const TextStyle(fontWeight: FontWeight.w700)),
               onTap: () => Navigator.pop(context, 'gallery'),
             ),
-            Divider(color: Theme.of(context).colorScheme.outlineVariant, height: 24, indent: 18, endIndent: 18),
-            ListTile(
-              leading: const Icon(Icons.auto_awesome_rounded, color: Color(0xFFE2B84C)),
-              title: Text(
-                strings.localeName == 'ar' ? 'توليد بطاقة رقمية مميزة' : 'Generate Premium Illustration',
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: Text(
-                strings.localeName == 'ar' ? 'توليد لوحة مميزة بناءً على الفئة المختارة' : 'Create a custom digital graphic of the item',
-                style: const TextStyle(fontSize: 11),
-              ),
-              onTap: () => Navigator.pop(context, 'illustration'),
-            ),
             const SizedBox(height: 12),
           ],
         ),
@@ -261,18 +170,6 @@ class _AddItemScreenState extends State<AddItemScreen> {
     );
 
     if (choice == null) return;
-    
-    if (choice == 'illustration') {
-      final selectedCat = _category ?? ItemCategory.other;
-      setState(() => _publishing = true);
-      final picked = await _createMockItemPhoto(selectedCat);
-      setState(() {
-        _photoUrl = picked;
-        _publishing = false;
-        _showErrors = false;
-      });
-      return;
-    }
 
     final picked = await _pickPhotoDataUri(fromCamera: choice == 'camera');
     if (picked == null) return;
@@ -323,10 +220,34 @@ class _AddItemScreenState extends State<AddItemScreen> {
     }
   }
 
-  void _useCurrentLocation() {
+  Future<void> _useCurrentLocation() async {
     setState(() {
-      _location = campusLocations.first;
       _showErrors = false;
+    });
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+    if (permission == LocationPermission.deniedForever) return;
+
+    final pos = await Geolocator.getCurrentPosition();
+    String addressLabel = 'Current Location';
+    try {
+      final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+      if (placemarks.isNotEmpty) {
+        final mark = placemarks.first;
+        addressLabel = mark.street ?? mark.subLocality ?? mark.locality ?? 'Current Location';
+      }
+    } catch (_) {}
+
+    setState(() {
+      _location = CampusLocation(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        placeLabel: addressLabel,
+      );
     });
   }
 
@@ -382,6 +303,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
     if (!ready) {
       setState(() => _showErrors = true);
+      if (_titleController.text.trim().isEmpty) {
+        _titleFocusNode.requestFocus();
+      } else if (_descriptionController.text.trim().isEmpty) {
+        _descriptionFocusNode.requestFocus();
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(strings.validationError),
@@ -577,9 +503,49 @@ class _AddItemScreenState extends State<AddItemScreen> {
     );
   }
 
+  void _nextStep() {
+    setState(() => _showErrors = true);
+    if (_currentStep == 0) {
+      if (_photoUrl == null || _category == null) return;
+    } else if (_currentStep == 1) {
+      if (_titleController.text.trim().isEmpty || _descriptionController.text.trim().isEmpty) {
+        if (_titleController.text.trim().isEmpty) {
+          _titleFocusNode.requestFocus();
+        } else {
+          _descriptionFocusNode.requestFocus();
+        }
+        return;
+      }
+    } else if (_currentStep == 2) {
+      if (_location == null) return;
+    }
+
+    setState(() {
+      _showErrors = false;
+      _currentStep++;
+    });
+    _pageController.animateToPage(
+      _currentStep,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _previousStep() {
+    if (_currentStep == 0) return;
+    setState(() {
+      _showErrors = false;
+      _currentStep--;
+    });
+    _pageController.animateToPage(
+      _currentStep,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isArabic = strings.localeName == 'ar';
     final textDirection = isArabic ? TextDirection.rtl : TextDirection.ltr;
     final backButton = _TopBarBackButton(
@@ -629,232 +595,289 @@ class _AddItemScreenState extends State<AddItemScreen> {
         body: SafeArea(
           child: Form(
             key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+            autovalidateMode: _showErrors ? AutovalidateMode.always : AutovalidateMode.disabled,
+            child: Column(
               children: [
-                _ReportTypeSelector(
-                  type: _type,
-                  strings: strings,
-                  onChanged: (value) => setState(() => _type = value),
-                ),
-                const SizedBox(height: 14),
-                _UploadArea(
-                  photoUrl: _photoUrl,
-                  category: _category ?? ItemCategory.other,
-                  hasError: _showErrors && _photoUrl == null,
-                  strings: strings,
-                  onTap: _pickImage,
-                ),
-                if (_showErrors && _photoUrl == null)
-                  _InlineError(message: strings.requiredField),
-                const SizedBox(height: 14),
-                _FormRowCard(
-                  label: strings.category,
-                  trailing: (!_userManuallySelectedCategory && _category != null)
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  child: Row(
+                    children: List.generate(4, (index) {
+                      final isActive = index <= _currentStep;
+                      return Expanded(
+                        child: Container(
+                          height: 6,
+                          margin: EdgeInsets.only(right: index < 3 ? 8 : 0),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(12),
+                            color: isActive 
+                                ? Theme.of(context).colorScheme.primary 
+                                : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(3),
                           ),
-                          child: Text(
-                            isArabic ? '✨ مقترح' : '✨ Auto-selected',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onPrimaryContainer,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+                Expanded(
+                  child: PageView(
+                    controller: _pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [
+                      // Step 0: Basics
+                      ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                        children: [
+                          _ReportTypeSelector(
+                            type: _type,
+                            strings: strings,
+                            onChanged: (value) => setState(() => _type = value),
+                          ),
+                          const SizedBox(height: 14),
+                          _UploadArea(
+                            photoUrl: _photoUrl,
+                            category: _category ?? ItemCategory.other,
+                            hasError: _showErrors && _photoUrl == null,
+                            strings: strings,
+                            onTap: _pickImage,
+                          ),
+                          if (_showErrors && _photoUrl == null)
+                            _InlineError(message: strings.requiredField),
+                          const SizedBox(height: 14),
+                          _FormRowCard(
+                            label: strings.category,
+                            trailing: (!_userManuallySelectedCategory && _category != null)
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      (strings.localeName == 'ar') ? '✨ مقترح' : '✨ Auto-selected',
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                            child: DropdownButtonFormField<ItemCategory>(
+                              initialValue: _category,
+                              isExpanded: true,
+                              dropdownColor: Theme.of(context).cardColor,
+                              icon: Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                              hint: Text(strings.categorySelectHint),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                errorBorder: InputBorder.none,
+                                focusedErrorBorder: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              items: ItemCategory.values.map((category) {
+                                return DropdownMenuItem(
+                                  value: category,
+                                  child: Text(categoryLabel(category, strings)),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _category = value;
+                                  _userManuallySelectedCategory = true;
+                                  _showErrors = false;
+                                });
+                              },
                             ),
                           ),
-                        )
-                      : null,
-                  child: DropdownButtonFormField<ItemCategory>(
-                    initialValue: _category,
-                    isExpanded: true,
-                    dropdownColor: Theme.of(context).cardColor,
-                    icon: Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    hint: Text(strings.categorySelectHint),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      errorBorder: InputBorder.none,
-                      focusedErrorBorder: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                    items: ItemCategory.values.map((category) {
-                      return DropdownMenuItem(
-                        value: category,
-                        child: Text(categoryLabel(category, strings)),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _category = value;
-                        _userManuallySelectedCategory = true;
-                        _showErrors = false;
-                      });
-                    },
-                  ),
-                ),
-                if (_showErrors && _category == null)
-                  _InlineError(message: strings.requiredField),
-                const SizedBox(height: 12),
-                _FormRowCard(
-                  label: strings.reportTitle,
-                  child: TextFormField(
-                    controller: _titleController,
-                    textInputAction: TextInputAction.next,
-                    textAlign: TextAlign.start,
-                    decoration: InputDecoration(
-                      hintText: strings.reportTitleHint,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _ItemAttributesCard(
-                  strings: strings,
-                  colorController: _colorController,
-                  brandController: _brandController,
-                  detailsController: _detailsController,
-                ),
-                if (_type == PostType.lost) ...[
-                  const SizedBox(height: 12),
-                  _LostOptionsCard(
-                    strings: strings,
-                    isUrgent: _isUrgent,
-                    hasReward: _hasReward,
-                    onUrgentChanged: (value) =>
-                        setState(() => _isUrgent = value),
-                    onRewardChanged: (value) =>
-                        setState(() => _hasReward = value),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                _FormRowCard(
-                  label: strings.dateTime,
-                  child: _DateTimeField(
-                    value: _formatReportDateTimePrimary(strings),
-                    helper: strings.reportDateTimeHint,
-                    onTap: _pickReportDateTime,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _FormRowCard(
-                  label: strings.contactOptional,
-                  child: TextFormField(
-                    controller: _contactController,
-                    textInputAction: TextInputAction.next,
-                    textAlign: TextAlign.start,
-                    decoration: InputDecoration(
-                      hintText: strings.contactMethodHint,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _SurfaceCard(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      FieldLabel(strings.itemDescription),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _descriptionController,
-                        minLines: 4,
-                        maxLines: 6,
-                        maxLength: 500,
-                        buildCounter:
-                            (
-                              context, {
-                              required currentLength,
-                              required isFocused,
-                              maxLength,
-                            }) => null,
-                        decoration: InputDecoration(
-                          hintText: strings.itemDescriptionHint,
-                          hintStyle: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          errorBorder: InputBorder.none,
-                          focusedErrorBorder: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        validator: (value) {
-                          final text = value?.trim() ?? '';
-                          if (text.isEmpty) return strings.requiredField;
-                          if (text.length > 500) {
-                            return strings.descriptionTooLong;
-                          }
-                          return null;
-                        },
+                          if (_showErrors && _category == null)
+                            _InlineError(message: strings.requiredField),
+                        ],
                       ),
-                      Align(
-                        alignment: AlignmentDirectional.centerEnd,
-                        child: Text(
-                          '${_descriptionController.text.length}/500',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                      // Step 1: Details
+                      ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                        children: [
+                          _FormRowCard(
+                            label: strings.reportTitle,
+                            child: TextFormField(
+                              controller: _titleController,
+                              focusNode: _titleFocusNode,
+                              textInputAction: TextInputAction.next,
+                              textAlign: TextAlign.start,
+                              decoration: InputDecoration(
+                                hintText: strings.reportTitleHint,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                errorBorder: InputBorder.none,
+                                focusedErrorBorder: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              validator: (value) {
+                                if (value?.trim().isEmpty ?? true) return strings.requiredField;
+                                return null;
+                              },
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 12),
+                          _SurfaceCard(
+                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                FieldLabel(strings.itemDescription),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: _descriptionController,
+                                  focusNode: _descriptionFocusNode,
+                                  minLines: 4,
+                                  maxLines: 6,
+                                  maxLength: 500,
+                                  buildCounter:
+                                      (
+                                        context, {
+                                        required currentLength,
+                                        required isFocused,
+                                        maxLength,
+                                      }) => null,
+                                  decoration: InputDecoration(
+                                    hintText: strings.itemDescriptionHint,
+                                    hintStyle: TextStyle(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    errorBorder: InputBorder.none,
+                                    focusedErrorBorder: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.onSurface,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  validator: (value) {
+                                    final text = value?.trim() ?? '';
+                                    if (text.isEmpty) return strings.requiredField;
+                                    if (text.length > 500) {
+                                      return strings.descriptionTooLong;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                Align(
+                                  alignment: AlignmentDirectional.centerEnd,
+                                  child: Text(
+                                    '${_descriptionController.text.length}/500',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          _ItemAttributesCard(
+                            strings: strings,
+                            colorController: _colorController,
+                            brandController: _brandController,
+                            detailsController: _detailsController,
+                          ),
+                        ],
+                      ),
+                      // Step 2: Where & When
+                      ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                        children: [
+                          _LocationSection(
+                            strings: strings,
+                            location: _location,
+                            locationDetailController: _locationDetailController,
+                            hasError: _showErrors && _location == null,
+                            errorMessage: strings.requiredField,
+                            onUseCurrentLocation: _useCurrentLocation,
+                            preview: _LocationPreview(
+                              location: _location ?? campusLocations.first,
+                              strings: strings,
+                              hasError: _showErrors && _location == null,
+                              onTap: _openLocationPicker,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _FormRowCard(
+                            label: strings.dateTime,
+                            child: _DateTimeField(
+                              value: _formatReportDateTimePrimary(strings),
+                              helper: strings.reportDateTimeHint,
+                              onTap: _pickReportDateTime,
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Step 3: Review
+                      ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                        children: [
+                          if (_type == PostType.lost) ...[
+                            _LostOptionsCard(
+                              strings: strings,
+                              isUrgent: _isUrgent,
+                              hasReward: _hasReward,
+                              onUrgentChanged: (value) =>
+                                  setState(() => _isUrgent = value),
+                              onRewardChanged: (value) =>
+                                  setState(() => _hasReward = value),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          _FormRowCard(
+                            label: strings.contactOptional,
+                            child: TextFormField(
+                              controller: _contactController,
+                              textInputAction: TextInputAction.next,
+                              textAlign: TextAlign.start,
+                              decoration: InputDecoration(
+                                hintText: strings.contactMethodHint,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _LocationSection(
-                  strings: strings,
-                  location: _location,
-                  locationDetailController: _locationDetailController,
-                  hasError: _showErrors && _location == null,
-                  errorMessage: strings.requiredField,
-                  onUseCurrentLocation: _useCurrentLocation,
-                  preview: _LocationPreview(
-                    location: _location ?? campusLocations.first,
-                    strings: strings,
-                    hasError: _showErrors && _location == null,
-                    onTap: _openLocationPicker,
                   ),
                 ),
               ],
@@ -864,34 +887,64 @@ class _AddItemScreenState extends State<AddItemScreen> {
         bottomNavigationBar: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
-            child: FilledButton(
-              onPressed: _publishing ? null : _publish,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(26),
-                ),
-              ),
-              child: _publishing
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Theme.of(context).colorScheme.onPrimary,
+            child: Row(
+              children: [
+                if (_currentStep > 0)
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _publishing ? null : _previousStep,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(26),
+                        ),
                       ),
-                    )
-                  : Text(
-                      widget.existingPost == null
-                          ? strings.submitReport
-                          : strings.saveChanges,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
+                      child: Text(
+                        (strings.localeName == 'ar') ? 'رجوع' : 'Back',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
+                  ),
+                if (_currentStep > 0) const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton(
+                    onPressed: _publishing ? null : (_currentStep == 3 ? _publish : _nextStep),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(26),
+                      ),
+                    ),
+                    child: _publishing
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          )
+                        : Text(
+                            _currentStep == 3
+                                ? (widget.existingPost == null
+                                    ? strings.submitReport
+                                    : strings.saveChanges)
+                                : ((strings.localeName == 'ar') ? 'التالي' : 'Next'),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1976,14 +2029,37 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
       title: Text(strings.pickLocation),
       content: SizedBox(
         width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             MiniMapPreview(location: _selected ?? campusLocations.first),
             const SizedBox(height: 12),
             FilledButton.tonalIcon(
-              onPressed: () =>
-                  setState(() => _selected = campusLocations.first),
+              onPressed: () async {
+                LocationPermission permission = await Geolocator.checkPermission();
+                if (permission == LocationPermission.denied) {
+                  permission = await Geolocator.requestPermission();
+                  if (permission == LocationPermission.denied) return;
+                }
+                if (permission == LocationPermission.deniedForever) return;
+
+                final pos = await Geolocator.getCurrentPosition();
+                String addressLabel = 'Current Location';
+                try {
+                  final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+                  if (placemarks.isNotEmpty) {
+                    final mark = placemarks.first;
+                    addressLabel = mark.street ?? mark.subLocality ?? mark.locality ?? 'Current Location';
+                  }
+                } catch (_) {}
+
+                setState(() => _selected = CampusLocation(
+                  lat: pos.latitude,
+                  lng: pos.longitude,
+                  placeLabel: addressLabel,
+                ));
+              },
               icon: const Icon(Icons.my_location_rounded),
               label: Text(strings.useCurrentGps),
               style: FilledButton.styleFrom(
@@ -1998,6 +2074,10 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
                 children: campusLocations.map((location) {
                   return RadioListTile<CampusLocation>(
                     value: location,
+                    // ignore: deprecated_member_use
+                    groupValue: _selected,
+                    // ignore: deprecated_member_use
+                    onChanged: (val) => setState(() => _selected = val),
                     selected: _selected == location,
                     contentPadding: EdgeInsets.zero,
                     title: Text(campusLocationLabel(location, strings)),
@@ -2010,6 +2090,7 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
             ),
           ],
         ),
+      ),
       ),
       actions: [
         TextButton(

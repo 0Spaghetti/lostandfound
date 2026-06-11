@@ -12,6 +12,7 @@ import '../settings/settings_screen.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/providers.dart';
+import '../auth/auth_state.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({
@@ -30,8 +31,9 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  bool _signedIn = true;
-  bool _loading = true;
+  bool _loading = false;
+
+  bool get _signedIn => ref.watch(authProvider).isAuthenticated;
 
   bool get _isPersonal =>
       widget.userId == null || widget.userId == 'current-user';
@@ -53,25 +55,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _loadProfileData() async {
-    if (!_isPersonal) {
-      setState(() => _loading = false);
-      return;
-    }
-    final prefs = ref.read(sharedPreferencesProvider);
-    if (!mounted) return;
-    setState(() {
-      _signedIn = prefs.getBool('settings_signed_in') ?? true;
-      _loading = false;
-    });
+    // Initial profile loading handled by providers
   }
 
-  Future<void> _setSignedIn(bool value) async {
-    setState(() => _signedIn = value);
-    final prefs = ref.read(sharedPreferencesProvider);
-    await prefs.setBool('settings_signed_in', value);
-    _showSnack(
-      value ? widget.strings.signIn : widget.strings.signedOut,
-    );
+  Future<void> _handleLogout() async {
+    await ref.read(authProvider.notifier).logout();
+    if (!mounted) return;
+    _showSnack(widget.strings.signedOut);
   }
 
   void _showSnack(String message) {
@@ -712,12 +702,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       icon: Icons.logout_rounded,
                       title: _signedIn ? widget.strings.signOut : widget.strings.signIn,
                       color: _signedIn ? const Color(0xFFE94335) : Theme.of(context).colorScheme.primary,
-                      onTap: () => unawaited(_setSignedIn(!_signedIn)),
+                      onTap: () => unawaited(_handleLogout()),
                     ),
                 ],
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 120),
           ],
         ),
       ),

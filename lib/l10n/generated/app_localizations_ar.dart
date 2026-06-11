@@ -54,10 +54,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get account => 'الحساب';
 
   @override
-  String get lost => 'مفقود';
+  String get lost => 'ضائعة';
 
   @override
-  String get found => 'موجود';
+  String get found => 'معثور عليها';
 
   @override
   String get recovered => 'تم الاستلام';

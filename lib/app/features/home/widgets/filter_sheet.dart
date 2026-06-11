@@ -115,6 +115,12 @@ class _FilterSheetState extends State<FilterSheet> {
                       selected: _draft.status == PostStatus.found,
                       onTap: () => _selectStatus(PostStatus.found),
                     ),
+                    _StatusChip(
+                      label: strings.recovered,
+                      dotColor: const Color(0xFF2D7DF0),
+                      selected: _draft.status == PostStatus.recovered,
+                      onTap: () => _selectStatus(PostStatus.recovered),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 22),

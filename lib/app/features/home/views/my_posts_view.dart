@@ -103,7 +103,7 @@ class MyPostsView extends ConsumerWidget {
               child: _MyPostsEmptyState(
                 title: strings.noMyPosts,
                 subtitle: strings.myPostsEmptyHint,
-                actionLabel: strings.addReport,
+                actionLabel: strings.postAnItemButton,
                 onAction: () => _openAddItem(context, ref),
                 secondaryLabel: strings.home,
                 onSecondaryAction: onOpenExploreFeed,

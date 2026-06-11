@@ -197,7 +197,16 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> {
               ],
             ),
           ),
-          if (filteredPosts.isEmpty)
+          if (!repository.isLoaded)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 104),
+              sliver: SliverList.separated(
+                itemCount: 4,
+                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                itemBuilder: (context, index) => const PostSkeleton(),
+              ),
+            )
+          else if (filteredPosts.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               child: EmptyState(

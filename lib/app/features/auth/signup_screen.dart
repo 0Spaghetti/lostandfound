@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../shared/l10n/app_strings.dart';
 import '../../shared/widgets/common_widgets.dart';
-import '../home/campus_shell.dart';
 import 'auth_state.dart';
 import 'login_screen.dart';
 import 'widgets/auth_widgets.dart';
@@ -23,6 +23,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
 
   @override
   void dispose() {
@@ -38,17 +39,54 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     if (!_formKey.currentState!.validate()) return;
     
     setState(() => _isLoading = true);
-    await ref.read(authProvider.notifier).signUp(
-      _nameController.text,
-      _emailController.text, 
-      _passwordController.text,
-    );
-    if (!mounted) return;
-    
-    HapticFeedback.mediumImpact();
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const CampusShell()),
-    );
+    try {
+      await ref.read(authProvider.notifier).signUp(
+        _nameController.text,
+        _emailController.text, 
+        _passwordController.text,
+      );
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      // Routing is handled automatically by AppStartupGate when authState changes.
+    } on FirebaseAuthException catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message ?? 'Sign up failed'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('An unexpected error occurred'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleGoogleSignup() async {
+    HapticFeedback.lightImpact();
+    setState(() => _isGoogleLoading = true);
+    try {
+      await ref.read(authProvider.notifier).signInWithGoogle();
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      // Routing is handled automatically by AppStartupGate when authState changes.
+    } catch (e) {
+      setState(() => _isGoogleLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Google Sign-In failed: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -126,9 +164,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       icon: Icons.email_outlined,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
-                      validator: (value) => value == null || value.isEmpty ? strings.requiredField : null,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) return strings.requiredField;
+                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) return strings.validationError;
+                        return null;
+                      },
                     ),
-                    const SizedBox(height: 16),
                     AuthTextField(
                       controller: _passwordController,
                       label: strings.password,
@@ -175,7 +216,30 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                               ),
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: (_isLoading || _isGoogleLoading) ? null : _handleGoogleSignup,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(56),
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF1D55D8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      icon: _isGoogleLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(color: Color(0xFF1D55D8), strokeWidth: 2),
+                            )
+                          : const Icon(Icons.g_mobiledata_rounded, size: 36),
+                      label: Text(
+                        Localizations.localeOf(context).languageCode == 'ar' ? 'التسجيل باستخدام Google' : 'Sign up with Google',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

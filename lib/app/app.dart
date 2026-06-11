@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'package:lostandfound/l10n/generated/app_localizations.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'data/providers.dart';
 import 'features/home/campus_shell.dart';
@@ -19,6 +21,7 @@ const _legacyOnboardingSeenKey = 'lost_found_onboarding_seen_v1';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   final prefs = await SharedPreferences.getInstance();
   runApp(
     ProviderScope(
@@ -71,11 +74,12 @@ class _AppStartupGateState extends ConsumerState<AppStartupGate> {
   }
 
   Future<void> _bootstrap() async {
+    await Permission.notification.request();
     final prefs = ref.read(sharedPreferencesProvider);
     final seenOnboarding =
         (prefs.getBool(_onboardingCompletedKey) ?? false) ||
         (prefs.getBool(_legacyOnboardingSeenKey) ?? false);
-    await Future<void>.delayed(const Duration(milliseconds: 2400));
+    await Future<void>.delayed(const Duration(milliseconds: 800));
 
     if (!mounted) return;
     setState(() {

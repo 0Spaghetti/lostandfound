@@ -354,8 +354,50 @@ class AppStrings {
   String get forgotPassword => localeName == 'ar' ? 'هل نسيت كلمة المرور؟' : 'Forgot Password?';
   String get loginRequiredTitle => localeName == 'ar' ? 'تسجيل الدخول مطلوب' : 'Login Required';
   String get pleaseLoginToContinue => localeName == 'ar' ? 'يرجى تسجيل الدخول للوصول إلى هذه الميزة.' : 'Please log in to access this feature.';
-}
 
+  // Safety & Map Additions
+  String get safetyFirstTitle => localeName == 'ar' ? 'السلامة أولاً' : 'Safety First';
+  String get safetyFirstFoundBody => localeName == 'ar' ? 'اطلب من الشخص إثبات ملكيته من خلال وصف تفصيل مخفي (مثل الرقم التسلسلي، أو المحتويات الدقيقة، أو خدش مميز) قبل الموافقة على اللقاء.' : 'Ask the person to prove ownership by describing a hidden detail (like a serial number, exact contents, or unique scratch) before agreeing to meet.';
+  String get continueToChat => localeName == 'ar' ? 'المتابعة للدردشة' : 'Continue to Chat';
+  String get safetyContactWarning => localeName == 'ar' ? 'نصيحة للسلامة: تجنب مشاركة أرقام الهواتف الشخصية حتى تتحقق من الطرف الآخر.' : 'Safety Tip: Avoid sharing personal phone numbers until you verify the other party.';
+  String get openInMaps => localeName == 'ar' ? 'الفتح في الخرائط' : 'Open in Maps';
+  String get approximateArea => localeName == 'ar' ? 'منطقة تقريبية' : 'Approximate Area';
+  String get noFavoritesEmptyTitle => localeName == 'ar' ? 'لا توجد مفضلات بعد' : 'No favorites yet';
+  String get noFavoritesEmptyHint => localeName == 'ar' ? 'اضغط على أيقونة القلب على أي منشور لحفظه لوقت لاحق.' : 'Tap the heart icon on any post to save it for later.';
+  String get postAnItemButton => localeName == 'ar' ? 'نشر عنصر' : 'Post an Item';
+  String get chatsEmptyHint => localeName == 'ar' ? 'لا توجد رسائل. ابدأ محادثة من صفحة تفاصيل أي عنصر.' : 'No messages. Start a chat from any item\'s details page.';
+
+  // Advanced Safety Guidance
+  String get safetyGuideTitle => localeName == 'ar' ? 'دليل التسليم الآمن' : 'Safe Handoff Guide';
+  String get safetyGuideSubtitle => localeName == 'ar' ? 'اتبع هذه الخطوات لاستعادة غرضك بأمان.' : 'Follow these steps to safely recover your item.';
+  String get verifiedPickupTitle => localeName == 'ar' ? 'مواقع الاستلام المعتمدة:' : 'Verified Campus Pickup Locations:';
+  String get proveOwnershipTitle => localeName == 'ar' ? 'قبل اللقاء، اطلب من المُعثِر التحقق من:' : 'Before meeting, ask the finder to verify:';
+  String get privateInfoWarning => localeName == 'ar' ? 'لا تشارك أبداً كلمات المرور أو التفاصيل البنكية أو الرموز الخاصة.' : 'Never share passwords, bank details, or private codes.';
+
+  List<String> get verifiedLocations => localeName == 'ar' 
+      ? ['أمن البوابة الرئيسية', 'شؤون الطلبة', 'مكتب الاستقبال في المكتبة', 'مكتب الأمن الجامعي']
+      : ['Main Gate Security', 'Student Affairs', 'Library Front Desk', 'Campus Security Office'];
+
+  String safetyPromptForCategory(ItemCategory category) {
+    if (localeName == 'ar') {
+      return switch (category) {
+        ItemCategory.electronics => 'الموديل، أو الخلفية، أو الرقم التسلسلي، أو لون الغلاف.',
+        ItemCategory.keys => 'عدد المفاتيح، أو العلامة، أو لون الحلقة.',
+        ItemCategory.bag => 'المحتويات الدقيقة داخل الحقيبة.',
+        ItemCategory.cards => 'الأحرف الأولى من الاسم أو آخر 4 أرقام فقط.',
+        ItemCategory.other => 'تفصيل مميز ومحدد غير ظاهر في الصور.',
+      };
+    } else {
+      return switch (category) {
+        ItemCategory.electronics => 'model, wallpaper, serial detail, or case color.',
+        ItemCategory.keys => 'key count, tag, or ring color.',
+        ItemCategory.bag => 'exact contents inside the bag.',
+        ItemCategory.cards => 'initials or last 4 digits only.',
+        ItemCategory.other => 'a specific distinguishing detail not visible in photos.',
+      };
+    }
+  }
+}
 String notificationTitle(NotificationModel notification, AppStrings strings) {
   if (strings.localeName != 'ar') return notification.title;
   if (notification.id.startsWith('n-')) {

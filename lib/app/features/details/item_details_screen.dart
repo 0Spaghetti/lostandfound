@@ -11,6 +11,8 @@ import '../../shared/l10n/app_strings.dart';
 import '../../shared/widgets/common_widgets.dart';
 import '../add_item/add_item_screen.dart';
 import '../chat/chat_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../shared/widgets/safety_widgets.dart';
 import '../profile/profile_screen.dart';
 
 class ItemDetailsScreen extends ConsumerStatefulWidget {
@@ -210,6 +212,28 @@ class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
   Future<void> _openChat() async {
     final post = _post;
     if (post == null) return;
+    
+    if (post.status == PostStatus.found) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(widget.strings.safetyFirstTitle),
+          content: Text(widget.strings.safetyFirstFoundBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(widget.strings.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(widget.strings.continueToChat),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+    }
+
     final thread = await ref.read(chatThreadRepositoryProvider).openThreadForPost(
       post,
       itemPostTitle(post, widget.strings),
@@ -255,22 +279,34 @@ class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
     );
   }
 
-  void _openMap() {
+  Future<void> _openMap() async {
     final post = _post;
     if (post == null) return;
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(widget.strings.openMap),
-        content: MiniMapPreview(location: post.location),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(widget.strings.cancel),
-          ),
-        ],
-      ),
-    );
+    
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${post.location.lat},${post.location.lng}');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        throw 'Could not launch map';
+      }
+    } catch (_) {
+      // Fallback if URL launcher fails
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(widget.strings.openMap),
+          content: MiniMapPreview(location: post.location),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(widget.strings.cancel),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _viewProfile() {
@@ -429,6 +465,7 @@ class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
                         color: post.isFavorite
                             ? const Color(0xFFE9435A)
                             : Theme.of(context).colorScheme.primary,
+                        semanticLabel: widget.strings.favorites,
                       ),
                     ),
                   ],
@@ -460,45 +497,6 @@ class _DetailsBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      Hero(
-        tag: 'photo-${post.id}',
-        child: LargePhotoPreview(
-          photoUrl: post.photoUrl,
-          category: post.category,
-        ),
-      ),
-      Stack(
-        fit: StackFit.expand,
-        children: [
-          LargePhotoPreview(photoUrl: post.photoUrl, category: post.category),
-          Positioned(
-            left: 16,
-            top: 16,
-            child: _OverlayPill(label: strings.openMap),
-          ),
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: _OverlayPill(label: strings.location),
-          ),
-        ],
-      ),
-      Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-        ),
-        padding: const EdgeInsets.all(18),
-        child: _PosterSummary(
-          post: post,
-          strings: strings,
-          onTap: onProfileTap,
-        ),
-      ),
-    ];
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 120),
       children: [
@@ -506,10 +504,12 @@ class _DetailsBody extends StatelessWidget {
           aspectRatio: 1.06,
           child: Stack(
             children: [
-              PageView(
-                controller: controller,
-                onPageChanged: onPageChanged,
-                children: pages,
+              Hero(
+                tag: 'photo-${post.id}',
+                child: LargePhotoPreview(
+                  photoUrl: post.photoUrl,
+                  category: post.category,
+                ),
               ),
               Positioned(
                 top: 14,
@@ -532,29 +532,6 @@ class _DetailsBody extends StatelessWidget {
                           : const Color(0xFF102A5C),
                     ),
                   ],
-                ),
-              ),
-              Positioned(
-                bottom: 14,
-                left: 0,
-                right: 0,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    pages.length,
-                    (index) => AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: index == pageIndex ? 22 : 7,
-                      height: 7,
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      decoration: BoxDecoration(
-                        color: index == pageIndex
-                            ? const Color(0xFF102A5C)
-                            : Colors.white.withValues(alpha: 0.75),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                  ),
                 ),
               ),
             ],
@@ -672,6 +649,13 @@ class _DetailsBody extends StatelessWidget {
             ),
           ),
         ),
+        if (post.type == PostType.found) ...[
+          const SizedBox(height: 18),
+          SafetyGuidanceCard(
+            category: post.category,
+            strings: strings,
+          ),
+        ],
         const SizedBox(height: 18),
         Row(
           children: [
@@ -715,31 +699,6 @@ class _TypePill extends StatelessWidget {
           fontWeight: FontWeight.w900,
         ),
       ),
-    );
-  }
-}
-
-class _OverlayPill extends StatelessWidget {
-  const _OverlayPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x180A2758),
-            blurRadius: 10,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
     );
   }
 }
@@ -890,7 +849,7 @@ class _PosterCard extends StatelessWidget {
           ),
           if (post.createdBy.contactMethod != null && post.createdBy.contactMethod!.isNotEmpty) ...[
             IconButton(
-              icon: const Icon(Icons.copy_all_rounded, size: 20),
+              icon: Icon(Icons.copy_all_rounded, size: 20, semanticLabel: strings.copy),
               tooltip: strings.copy,
               style: IconButton.styleFrom(
                 foregroundColor: Theme.of(context).colorScheme.primary,
@@ -905,9 +864,20 @@ class _PosterCard extends StatelessWidget {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(strings.localeName == 'ar' ? 'تم نسخ جهة الاتصال!' : 'Contact copied to clipboard!'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            strings.localeName == 'ar' ? 'تم نسخ جهة الاتصال!' : 'Contact copied to clipboard!',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(strings.safetyContactWarning),
+                        ],
+                      ),
                       behavior: SnackBarBehavior.floating,
-                      duration: const Duration(seconds: 1),
+                      duration: const Duration(seconds: 4),
                     ),
                   );
                 }
@@ -924,68 +894,6 @@ class _PosterCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PosterSummary extends StatelessWidget {
-  const _PosterSummary({
-    required this.post,
-    required this.strings,
-    required this.onTap,
-  });
-
-  final ItemPost post;
-  final AppStrings strings;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final name = post.createdBy.userId.replaceAll(RegExp(r'[_-]+'), ' ').trim();
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: const Color(0xFF102A5C),
-          child: Text(
-            name.isEmpty
-                ? '?'
-                : name
-                      .split(' ')
-                      .where((part) => part.isNotEmpty)
-                      .take(2)
-                      .map((part) => part[0].toUpperCase())
-                      .join(),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name.isEmpty ? strings.postedBy : name,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0A2758),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                contactMethodLabel(post.createdBy.contactMethod, strings),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: const Color(0xFF64748B)),
-              ),
-            ],
-          ),
-        ),
-        TextButton(onPressed: onTap, child: Text(strings.viewProfile)),
-      ],
     );
   }
 }

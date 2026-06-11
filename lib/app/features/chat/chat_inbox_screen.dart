@@ -17,6 +17,7 @@ class ChatInboxScreen extends ConsumerWidget {
     required this.strings,
     required this.onLanguageToggle,
     required this.languageLabel,
+    required this.onOpenExploreFeed,
     this.onNotificationsTap,
     this.hasUnreadNotifications = false,
   });
@@ -24,6 +25,7 @@ class ChatInboxScreen extends ConsumerWidget {
   final AppStrings strings;
   final VoidCallback onLanguageToggle;
   final String languageLabel;
+  final VoidCallback onOpenExploreFeed;
   final VoidCallback? onNotificationsTap;
   final bool hasUnreadNotifications;
 
@@ -57,9 +59,9 @@ class ChatInboxScreen extends ConsumerWidget {
               hasScrollBody: false,
               child: EmptyState(
                 title: strings.chat,
-                subtitle: strings.startConversationHint,
+                subtitle: strings.chatsEmptyHint,
                 resetLabel: strings.home,
-                onReset: () {},
+                onReset: onOpenExploreFeed,
               ),
             )
           else

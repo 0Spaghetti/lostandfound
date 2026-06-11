@@ -389,10 +389,11 @@ class _NotificationBell extends StatelessWidget {
       icon: Stack(
         clipBehavior: Clip.none,
         children: [
-          const Icon(
+          Icon(
             Icons.notifications_none_rounded,
-            color: Color(0xFF0A2758),
+            color: const Color(0xFF0A2758),
             size: 26,
+            semanticLabel: AppStrings.of(context).notifications,
           ),
           if (hasUnread)
             PositionedDirectional(
@@ -717,6 +718,7 @@ class ItemPostCard extends StatelessWidget {
                         ? Icons.favorite_rounded
                         : Icons.favorite_border_rounded,
                     key: ValueKey(post.isFavorite),
+                    semanticLabel: strings.favorites,
                     color: post.isFavorite
                         ? const Color(0xFFDC2626)
                         : const Color(0xFF6B7280),
@@ -987,6 +989,25 @@ class MiniMapPreview extends StatelessWidget {
         child: Stack(
           children: [
             Positioned.fill(child: CustomPaint(painter: CampusMapPainter())),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  AppStrings.of(context).approximateArea,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
             Align(
               alignment: const Alignment(0.16, -0.12),
               child: Column(

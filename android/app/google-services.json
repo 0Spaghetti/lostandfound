@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "800398052571",
+    "project_id": "lostandfound-31cac",
+    "storage_bucket": "lostandfound-31cac.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:800398052571:android:6bb4a1cffdde5e8ea690fe",
+        "android_client_info": {
+          "package_name": "com.example.lostandfound"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "800398052571-a3ilefg0qj6vrivdtgepv556lnrmn8jb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.lostandfound",
+            "certificate_hash": "660b70606f8d86384ec986ca52bb3b6ebe685a09"
+          }
+        },
+        {
+          "client_id": "800398052571-esvfojqer3kl0i732rkj174tk7hndufd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1OZGPQb9Nb3zhXByD9IUobASlqzXXOzQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "800398052571-esvfojqer3kl0i732rkj174tk7hndufd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -70,8 +70,8 @@ class FavoritesView extends ConsumerWidget {
             SliverFillRemaining(
               hasScrollBody: false,
               child: EmptyState(
-                title: strings.favorites,
-                subtitle: strings.emptyHint,
+                title: strings.noFavoritesEmptyTitle,
+                subtitle: strings.noFavoritesEmptyHint,
                 resetLabel: strings.home,
                 onReset: () {
                   unawaited(onOpenExploreFeed());
